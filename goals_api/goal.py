@@ -38,6 +38,8 @@ class Goal:
 """
 Notes:
 
+Horizontal timetable
+
 - A goal has a starting date and a deadline date.
 - A goal can be single or recurring.
 - A goal has the following optional callbacks:
@@ -53,11 +55,22 @@ Notes:
 - A goal can be time-based or task-based.
     - Time-based: Criterion is based on time, such as working on something for X amount of time
     - Task-based: Criterion is based on completing a task
-- Dates in a goal can either be set by you or be set by another party outside your control
+- Dates in a goal can either be set by you or be set by another party outside your control (e.g exam)
 
-- A goal comes with a "strategy", which is essentially a list of subgoals. Each goal should always have many subgoals
-instead of cramming a long criterion or complex time bound. If a goal's time bound ends, the goal dies along with
-all of its sub goals
+- A goal comes with a "strategy", which is essentially a list of subgoals.
+
+    - All task based goals break down into time-based subgoals. This is because to accomplish any task, you need to
+    dedicate time to it. This is fundamentally a goal. Therefore, the leaves of any subgoal tree are always time-based.
+    However, below examples, especially the 3rd one, illustrate how some timebased subgoals are just direct replicas
+    of the parent goal. This formality is so that taskbased goals can be planned in the calendar
+
+    - Subgoals can only exist within the timebound of the parent goal. Therefore, subgoals will always expire before
+    the parent goal. Recurring subgoals recur up to the last possible recurrance without exceeding parent timebound
+
+    Examples:
+    - Get P3 (taskbased) { fulfill requirements (taskbased) { go fly {timebased} }, take exam (event), do SIV (event), get signed off (event) }
+    - Do assignment (taskbased) { work on assignment (timebased), submit assignment (taskbased) { work on submitting {timebased} } }
+    - Take a photo of Ascutney (taskbased) { work on taking a photo of ascutney (timebased) }
 
 - A goal is "tightly bounded" if its start and end date difference are exactly equal to the time criterion. 
 A goal must be time-based for this to work, since a task-based goal may take longer or shorter than the given interval.
@@ -66,23 +79,76 @@ A goal must be time-based for this to work, since a task-based goal may take lon
  to the time-based criterion and are not controlled by you. For this reason, "Event" will be a shorthand format
  for this type of goal; a goal which is both tightly bounded AND the dates are not controlled by you
 
-- A Calendar always shows all tightly bounded goals as anchored to their time since there is no customization to their
-movement. Furthermore, "Events" will be shown in a highlighted manner indicating that the dates are not controlled by
-you
+- Goal resolution:
+    - If a goal's timebound expires, the goal gets added to a queue of unresolved goals
+        - The queue must be cleared each time the app is opened before other actions can be performed
+        - If a subgoal's expiration is tied with the parent's, the subgoal must be resolved first
+        - Resolving means checking success (as in the goal was completed) or failure (means the goal expired uncompleted)
+        - During resolution, the goal can be edited in case plans changed but the app wasn't opened earlier. After editing
+        is finished, the goal will either reappear in the queue or be removed (typically editing involves extending deadline)
+        - During resolution, the goal can also be deleted
+    - A goal can always be checked off as a success anytime
+        - Since subgoals are resolved first in timebound expiration, all subgoals will be dead prior to parent goal
+        UNLESS its a recurring subgoal OR the goal was checked off as an early success
+    - A success goal death prompts the execution of the success callback immediately. Same with failure goal death
+        - A failure which involves deadline extension will automatically revive any recurring subgoals
+        - A goal death will automatically kill all subgoals (e.g early success). Only the "finally" callback will execute
+        on those subgoals
 
-- Goals that aren't tightly bounded will float around freely within their time bound. You can drag them around times
-and dates but not outside the bound. As part of habitica evening check, you should always plan your next day concretely,
-but also you should move around and plan days ahead as you may have new information
+- Common failure callbacks:
+    - Extend deadline with optional penalty or increasing penalty per extension
+    - New goal to makeup the missed goal with optional penalty
 
-- [1] Morning checkins will involve checking off what you did yesterday from your planned day goal list, and what you didn't,
-as well as executing success{} and finally{} blocks. If a goal's time-bound exceeded and you didn't do it, also execute
-failure{}. Otherwise, the goal you didn't complete gets moved back into planning if it has more time until it's time-end bound
+- Recurring goals:
+    - A recurrence is a function which spawns goals by some set of time-based rules. Therefore, a "recurrence" and a goal
+    resulting from a recurrence are separate things
+    - A recurring goal's time bound can overlap or have gaps
+    - A single instance of a recurring goal is active at a time
+    - A recurrence can be configured to:
+        - End at a certain date: it will recur until the next recurrence would exceed this date (thus there may be a gap)
+        - Recur a specific number of times after which it stops
+        - Omit/cancel a specific recurrence by date or count
+    - Editing a goal spawned as part of the recurrence also has a section to edit the recurrence itself
+    - Goals as part of a recurrence technically spawn immediately upon the goal start date of the next recurrence. Once
+    the goal is spawned, it is now unaffected by recurrence edits
 
-- [2] Habitica should still be checked mornings and evenings. If you need to quickly scribble down a goal, but don't
-have access to this app, add it to the to do habitica list. In the evening procedure, it should be mandatory
-to go through the to do and do all the "quick tasks" before bed, or turn them into goals otherwise
+- Goal display
+    - Goals will all be shown in the horizontal timeline stacked vertically
+    - Recurrences will show "ghost" goals which have yet to be spawned
+    - Subgoals will always take rows immediately below the parent
+    - Recurrences take up a whole row of their own. Otherwise, non-overlapping goals may use the same row
+    - A time-based goal whose timebound is greater than the criteria appears differently than those that are tightly bounded
+        - It is typical for a non-tightly-bounded time-based goal to have subgoals which are tightly bounded
+        - e.g Work on Paxos for 10 hours in the week, but then you schedule tight work goals throughout the week
+    - Events have an extra highlight to them
+
+- Goal Progress
+    - Nested timebased: It is often useful to break down long term time-based goals into smaller time-based goals. To put
+    in 500 hours of reading in a year, you might read for 2-3 hours a day. Such nesting can be directly configured to feed
+    into the criteria progress for the parent goal
+    - Record time: A time-based goal has a nice UI to record time you've committed to the goal so far
+    - Checklist: Criteria can have an embedded checklist which saves state of checked items
+    - Checklist goal link: A checklist item can link to subgoal and will automatically get checked off if that subgoal
+    has succeeded (or show a red X if the goal has failed)
+
+- Draft goals: It is often useful to have a goal be partially created but not yet active. For example, you know you'll
+go on a hike in the next year, but you have no clue when. You dont want the goal to be evaluated for failure or success
+yet. Such goals are left as "drafts".
+    - If your draft has a date set on it (as a tentative date), then it will show up on the timeline with a
+    special "ghost" appearance.
+    - The app will prompt you to edit the goal if the tentative start date is approaching within a configured interval
+    - Active goals can be changed to draft goals
+    - Deadlineless goals are effectively "Draft" goals since you are not actively pursuing their completion yet
+
+- Dead goals are kept on record for a while until they are deleted (maybe month or more)
 
 - At any time for any reason, you have the power to modify goals, move them, etc
+
+- Automated callbacks: Some callback tasks on success or failure can be preset automations. You will still be prompted
+to execute this automation when resolving a goal, but you wont need to do manual labor. Automations include
+    - Extend deadline of this goal by X
+    - TODO: Add more. e.g creating new goals, modifying values, etc. Automatic tasks will be choosable from a list with
+    a custom set of parameters for each, and add-able to a goal's blocks.
 
 - Evening Checkin Summary:
     - [2] Complete quick-tasks, which often involve creating goals
@@ -90,36 +156,5 @@ to go through the to do and do all the "quick tasks" before bed, or turn them in
 
 - Morning Checkin Summary:
     - [1] Check of yesterday's goal completion
-
-- Dealing with late work: Sometimes, a goal's end date reaches and you now must execute the fail + finally actions
-if the goal wasn't complete. Often, you might want to create a second goal which is a "catch up on this thing"-type 
-goal. Maybe a second late penalty deadline gets enacted, or maybe you have a weekend where you catch up on missed work.
-Whatever the case, it is convenient to simply create a second goal as the failure event of the first one. This should
-be an easy UI option. Furthermore, this second goal creation is an automatic task, so it shouldnt require manual work
-
-- The types of callbacks you can specify in the failure{} success{} finally{} blocks can be manual or automatic.
-    - Manual are tasks written in English that cannot be done by the app but must be done by you
-    - Automatic are tasks that the app can do automatically, such as creating new goals, modifying values, etc.
-    Automatic tasks will be choosable from a list with a custom set of parameters for each, and add-able to a goal's
-    blocks.
-
-- Something to note is that not all goals appear in the timetable! Consider the goal "Do assignment". For this goal to
-appear, you need time-based subgoals such as "Work on assignment". Since it is so common to create and constantly move
-these "Work on assignment"-type subgoals, they should be easily creatable. The "Do Assignment" and any other non-time-based
-goals will appear in a goal list outside, with their start and end date bounds visible on the calendar. You can easily
-create the work subgoals by a simple UI interface. You can name rename them if you'd like. Maybe you want some
-"Submit assignment" goal for 30 min near the deadline.
-    
-- Whenever you open the app, any goals whose deadline has passed BUT have not been dealt with will appear highlighted.
-These goals may either be on the timetable (if time-based) or in the separate list if task-based. Each highlighted goal
-can be "finalized". Finalizing involves marking it as complete or "failed", and then executing the corresponding event
-tasks in the blocks. If all the events are automatic for the given outcome (fail/success), then a simple button click
-will execute them. Otherwise you will be shown the manual tasks you must do and then a button to confirm you've done
-them can close the goal. completed/failed goals will be in their own list, never deleted. You can delete a goal manually
-anytime.
-
-- Sometimes you want to keep track of goal information throughout the period. Add an optional text area to enter info
-
-- Some goals have no deadline. These goals linger in a separate list and might acquire a deadline later.
 """
 
