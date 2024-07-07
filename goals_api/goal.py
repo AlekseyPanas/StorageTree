@@ -140,6 +140,28 @@ yet. Such goals are left as "drafts".
     - Active goals can be changed to draft goals
     - Deadlineless goals are effectively "Draft" goals since you are not actively pursuing their completion yet
 
+- Window Goals: This special type of goal is a maintenance goal. Rather than having a criteria which must be completed,
+the criteria must be maintained. e.g Maintain 5 hours of bike riding per 7 days.
+    - Has a time window within which the criteria must be satisfied.
+    - For the above example, as long as you biked for at least 5 hours in the past 7 days, you're maintaining it.
+    - If you biked 5 hours in the past 7 days but 3 of those were done exactly 7 days ago, the next day over you will
+    only have biked 2 hours in the past 7 days since the window moved. You must now bike again to maintain the goal
+    - success/failure for such a goal must be configured to either be interval-based or continuous. For the duration
+    that the goal is maintained, the "success" will be evaluated. Otherwise failure
+        - e.g continuous: +3 coins / 1 hour. Then for any unit of time that the goal is maintained, you gain an exact
+        amount of coin
+        - e.g interval: 10 pushups / 1 day of no maintenance. If less than a day, then you dont get your punishment/reward.
+        It must be that the interval has passed exactly.goal
+    - The criteria for this goal must be numerically quantifiable. This is required and built into the app
+    - To log completion of this goal, you enter a quantity along with a log time
+        - e.g for the bike example, you might log 30 min at 4:15 PM, Monday.
+    - If you open the app maintenance goals will prompt you
+        - An unmaintained goal will first ask you to log anything you may have not logged in hindsight.
+        - Then if the success/failure is interval based, it will prompt you to execute the callback for how many ever
+        intervals have passed in maintained or unmaintained states based on what you logged
+            - If continuous, it will prompt you once for the whole duration
+
+
 - Dead goals are kept on record for a while until they are deleted (maybe month or more)
 
 - At any time for any reason, you have the power to modify goals, move them, etc
