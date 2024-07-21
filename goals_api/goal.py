@@ -41,7 +41,6 @@ Notes:
 Horizontal timetable
 
 - A goal has a starting date and a deadline date.
-- A goal can be single or recurring.
 - A goal has the following optional callbacks:
 
     success {
@@ -58,11 +57,6 @@ Horizontal timetable
 - Dates in a goal can either be set by you or be set by another party outside your control (e.g exam)
 
 - A goal comes with a "strategy", which is essentially a list of subgoals.
-
-    - All task based goals break down into time-based subgoals. This is because to accomplish any task, you need to
-    dedicate time to it. This is fundamentally a goal. Therefore, the leaves of any subgoal tree are always time-based.
-    However, below examples, especially the 3rd one, illustrate how some timebased subgoals are just direct replicas
-    of the parent goal. This formality is so that taskbased goals can be planned in the calendar
 
     - Subgoals can only exist within the timebound of the parent goal. Therefore, subgoals will always expire before
     the parent goal. Recurring subgoals recur up to the last possible recurrance without exceeding parent timebound
@@ -91,7 +85,7 @@ A goal must be time-based for this to work, since a task-based goal may take lon
         - Since subgoals are resolved first in timebound expiration, all subgoals will be dead prior to parent goal
         UNLESS its a recurring subgoal OR the goal was checked off as an early success
     - A success goal death prompts the execution of the success callback immediately. Same with failure goal death
-        - A failure which involves deadline extension will automatically revive any recurring subgoals
+        - A failure which involves deadline extension will automatically revive any recurring subgoals if theyre indefinite
         - A goal death will automatically kill all subgoals (e.g early success). Only the "finally" callback will execute
         on those subgoals
 
@@ -103,12 +97,10 @@ A goal must be time-based for this to work, since a task-based goal may take lon
     - A recurrence is a function which spawns goals by some set of time-based rules. Therefore, a "recurrence" and a goal
     resulting from a recurrence are separate things
     - A recurring goal's time bound can overlap or have gaps
-    - A single instance of a recurring goal is active at a time
     - A recurrence can be configured to:
         - End at a certain date: it will recur until the next recurrence would exceed this date (thus there may be a gap)
         - Recur a specific number of times after which it stops
         - Omit/cancel a specific recurrence by date or count
-    - Editing a goal spawned as part of the recurrence also has a section to edit the recurrence itself
     - Goals as part of a recurrence technically spawn immediately upon the goal start date of the next recurrence. Once
     the goal is spawned, it is now unaffected by recurrence edits
 
@@ -129,6 +121,7 @@ A goal must be time-based for this to work, since a task-based goal may take lon
     - Record time: A time-based goal has a nice UI to record time you've committed to the goal so far
     - Checklist: Criteria can have an embedded checklist which saves state of checked items
     - Checklist goal link: A checklist item can link to subgoal and will automatically get checked off if that subgoal
+    - Text: Criteria is sometimes just a line of text instructions
     has succeeded (or show a red X if the goal has failed)
 
 - Draft goals: It is often useful to have a goal be partially created but not yet active. For example, you know you'll
@@ -169,6 +162,8 @@ the criteria must be maintained. e.g Maintain 5 hours of bike riding per 7 days.
 - Automated callbacks: Some callback tasks on success or failure can be preset automations. You will still be prompted
 to execute this automation when resolving a goal, but you wont need to do manual labor. Automations include
     - Extend deadline of this goal by X
+    - Increment or decrement a defined variable
+    - Update callback of _ to _
     - TODO: Add more. e.g creating new goals, modifying values, etc. Automatic tasks will be choosable from a list with
     a custom set of parameters for each, and add-able to a goal's blocks.
 
