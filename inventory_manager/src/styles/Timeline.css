@@ -1,0 +1,19 @@
+#timelineContainer {
+    display: block;
+    margin: 0;
+    padding: 0;
+    position: static;
+    overflow-x: hidden;
+    overflow-y: scroll;
+}
+
+.timelineRow {
+    display: block;
+    margin: 0;
+    border-color: cadetblue;
+    border-width: 1px 0 1px 0;
+    border-style: solid;
+    position: relative;
+    overflow-x: hidden;
+    width: 100%;
+}

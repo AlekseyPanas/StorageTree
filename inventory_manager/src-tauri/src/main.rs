@@ -33,16 +33,19 @@ react state: edit_recurrence_dat
 react state: edit_goal_dat
 react state: success_list
 react state: failure_list
+react state: recurrence_context
+react state: goal_context
 
 App:
     Timeline View:  // Interactive timeline component containing all goal blocks, and functionality
         // Dragging or scrolling edits some state which controls timeline "camera" window
         // On receive click from block, make it selected
-        // TODO: Figure out drag to extend time bound or to move the goal
+        // On receive appropriate drag event, modify timeline_structure accordingly and push goal change to DB
         foreach in timeline_structure:
             Block:
                 // A single goal block. Customizable to display blocks for everything that will appear on the timeline
                 // Clicking it calls parent function from Timeline view
+                // Dragging an edge or on body of block will trigger appropriate callbacks in parent
     Edit Recurrence:
         // Modal to edit or make a new recurrence. Invisible by default. Filled from edit_recurrence_dat
         // Upon clicking save, calls a function passed from App. App knows what to do based on the context in which the modal was opened
@@ -50,7 +53,8 @@ App:
     Success,Failure,Edit Modal
     Skip these goals, edit recurrence, create goals Modal
     Failure List Modal:  // Reads from failure_list
-    Success LIst Modal:  // Reads from success_list
-    // TODO: Figure out right click contexts
+    Success List Modal:  // Reads from success_list
+    Recurrence context menu:  // Reads position and is_enabled from recurrence_context
+    Goal context menu:  // same but with goal_context
 
 */
