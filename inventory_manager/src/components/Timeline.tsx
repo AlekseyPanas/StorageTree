@@ -1,6 +1,7 @@
 import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
+import {i} from "@tauri-apps/api/fs-6ad2a328";
 
 // fn fetch_goal_data() -> Goal[]
 // - Fetch all goals from DB
@@ -89,22 +90,55 @@ function Timeline() {
         ]
     });
 
+    let parentRefs = timelineStruct.rows.map((goals, i) => (
+        useRef(null)
+    ));
+    let childRefs = timelineStruct.rows.map((goals, i) => (
+        goals.map((goal, j) => (
+            useRef(null)
+        ))
+    ));
+
+    function updateHeight() {
+        console.log("func called");
+        for (let i = 0; i < parentRefs.length; i++) {
+            let height = 0;
+            for (let j = 0; j < childRefs[i].length; j++) {
+                console.log(childRefs[i][j].current.offsetHeight);
+                if (childRefs[i][j].current.offsetHeight > height) {
+                    height = childRefs[i][j].current.offsetHeight;
+                    console.log("test");
+                }
+            }
+            parentRefs[i].current.style.height = height + "px";
+        }
+    }
+
+    useEffect(() => {
+        updateHeight();
+        console.log("here");
+        window.addEventListener("resize", updateHeight);
+    });
+
     return (
         <div id="timelineContainer">
             {
                 timelineStruct.rows.map((goals, i) => (
                     (
-                        <div className="timelineRow">
+                        <div className="timelineRow" ref={parentRefs[i]}>
                             {
                                 goals.map((goal, j) => (
-                                    <GoalBlock
-                                        goalTitle={goal.title}
-                                        goalCriteria={goal.criteria}
-                                        goalSuccess={goal.success}
-                                        goalFailure={goal.failure}
-                                        leftOffsetPx={j * 250}
-                                        widthPx={j * 50}
-                                    ></GoalBlock>
+                                    <div className="goalBlockOuterContainer" ref={childRefs[i][j]}>
+                                        <GoalBlock
+                                            key={i+","+j}
+                                            goalTitle={goal.title}
+                                            goalCriteria={goal.criteria}
+                                            goalSuccess={goal.success}
+                                            goalFailure={goal.failure}
+                                            leftOffsetPx={j * 250}
+                                            widthPx={(j + 1) * 40}
+                                        ></GoalBlock>
+                                    </div>
                                 ))
                             }
                         </div>
