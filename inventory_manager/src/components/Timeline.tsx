@@ -100,46 +100,81 @@ function Timeline() {
     ));
 
     function updateHeight() {
-        console.log("func called");
         for (let i = 0; i < parentRefs.length; i++) {
             let height = 0;
             for (let j = 0; j < childRefs[i].length; j++) {
-                console.log(childRefs[i][j].current.offsetHeight);
                 if (childRefs[i][j].current.offsetHeight > height) {
                     height = childRefs[i][j].current.offsetHeight;
-                    console.log("test");
                 }
             }
             parentRefs[i].current.style.height = height + "px";
         }
     }
 
+    function timeScale(event) {
+        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel + event.deltaY});
+    }
+
+    let dragPosRecord = useRef(0);
+    let isDragging = useRef(false);
+
+    function mouseDownHandler(event) {
+        event.preventDefault();
+        isDragging.current = true;
+        dragPosRecord.current = event.screenX;
+    }
+
+    function mouseMoveHandler(event) {
+        event.preventDefault();
+        if (isDragging.current) {
+            let diffPx = event.screenX - dragPosRecord.current;
+            let newLeftEdge = new Date(0);
+            newLeftEdge.setUTCMilliseconds(
+                timelineStruct.leftEdgeDate.getTime() - (diffPx * timelineStruct.secondsPerPixel * 1000)
+            );
+            setTimelineStruct({...timelineStruct, leftEdgeDate: newLeftEdge})
+            dragPosRecord.current = event.screenX;
+        }
+    }
+
+    function mouseUpHandler(event) {
+        event.preventDefault();
+        isDragging.current = false;
+    }
+
     useEffect(() => {
         updateHeight();
-        console.log("here");
         window.addEventListener("resize", updateHeight);
+        window.addEventListener("wheel", timeScale);
     });
 
     return (
-        <div id="timelineContainer">
+        <div id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler} onMouseMove={mouseMoveHandler}>
             {
                 timelineStruct.rows.map((goals, i) => (
                     (
                         <div className="timelineRow" ref={parentRefs[i]}>
                             {
-                                goals.map((goal, j) => (
-                                    <div className="goalBlockOuterContainer" ref={childRefs[i][j]}>
-                                        <GoalBlock
-                                            key={i+","+j}
-                                            goalTitle={goal.title}
-                                            goalCriteria={goal.criteria}
-                                            goalSuccess={goal.success}
-                                            goalFailure={goal.failure}
-                                            leftOffsetPx={j * 250}
-                                            widthPx={(j + 1) * 40}
-                                        ></GoalBlock>
-                                    </div>
-                                ))
+                                goals.map((goal, j) => {
+                                    let goalStartMs = goal.startTime.getTime();
+                                    let diffMs = goal.deadline.getTime() - goalStartMs;
+                                    let leftEdgeMs = timelineStruct.leftEdgeDate.getTime();
+                                    let diffPx = diffMs / (timelineStruct.secondsPerPixel * 1000);
+                                    let goalStartPx = (goalStartMs - leftEdgeMs) / (timelineStruct.secondsPerPixel * 1000);
+                                    return (
+                                        <div className="goalBlockOuterContainer" ref={childRefs[i][j]}>
+                                            <GoalBlock
+                                                key={i + "," + j}
+                                                goalTitle={goal.title}
+                                                goalCriteria={goal.criteria}
+                                                goalSuccess={goal.success}
+                                                goalFailure={goal.failure}
+                                                leftOffsetPx={goalStartPx}
+                                                widthPx={diffPx}
+                                            ></GoalBlock>
+                                        </div>
+                                    )
+                                })
                             }
                         </div>
                     )
