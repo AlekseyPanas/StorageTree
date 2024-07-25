@@ -2,9 +2,8 @@
     display: block;
     margin: 0;
     padding: 0;
-    position: static;
-    overflow-x: hidden;
-    overflow-y: scroll;
+    position: relative;
+    height: auto;
 }
 
 .timelineRow {
@@ -16,9 +15,26 @@
     position: relative;
     overflow-x: hidden;
     width: 100%;
-    height: 200px;
 }
 
 .goalBlockOuterContainer {
     position: absolute;
+}
+
+.timelineVerticalLine {
+    position: absolute;
+    height: 100%;
+    width: 0;
+    border-color: cadetblue;
+    border-width: 0 1px 0 0;
+    border-style: solid;
+    left: 0;
+    top: 0;
+}
+
+.timelineTimeText {
+    font-size: x-small;
+    position: absolute;
+    display: block;
+    top: -30px;
 }

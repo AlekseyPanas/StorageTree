@@ -2,6 +2,7 @@ import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
 import {useEffect, useRef, useState} from "react";
 import {i} from "@tauri-apps/api/fs-6ad2a328";
+import {d} from "@tauri-apps/api/http-43c39402";
 
 // fn fetch_goal_data() -> Goal[]
 // - Fetch all goals from DB
@@ -41,7 +42,7 @@ function fetchRecurrenceData() {
 
 function Timeline() {
     const [timelineStruct, setTimelineStruct] = useState({
-        secondsPerPixel: 2000,
+        secondsPerPixel: 20,
         leftEdgeDate: new Date(2024, 7, 14, 2, 0, 0),
         rows: [
             [
@@ -99,6 +100,9 @@ function Timeline() {
         ))
     ));
 
+    let containerRef = useRef(null);
+    let [containerWidth, setContainerWidth] = useState(0);
+
     function updateHeight() {
         for (let i = 0; i < parentRefs.length; i++) {
             let height = 0;
@@ -142,14 +146,68 @@ function Timeline() {
         isDragging.current = false;
     }
 
-    useEffect(() => {
+    function resizeHandler() {
         updateHeight();
-        window.addEventListener("resize", updateHeight);
+        setContainerWidth(containerRef.current.offsetWidth);
+    }
+
+    useEffect(() => {
+        resizeHandler();
+        window.addEventListener("resize", resizeHandler);
         window.addEventListener("wheel", timeScale);
     });
 
     return (
-        <div id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler} onMouseMove={mouseMoveHandler}>
+        <div ref={containerRef} id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler}
+             onMouseMove={mouseMoveHandler}>
+            {
+                (() => {
+                    let totalMs = timelineStruct.secondsPerPixel * containerWidth * 1000;
+                    let rightEdgeDate = new Date(timelineStruct.leftEdgeDate.getTime() + totalMs);
+
+                    let intervalMs;
+                    let getStringFunc;
+                    let firstDate = new Date(timelineStruct.leftEdgeDate.getTime());
+                    if (totalMs > (7.884e+9 / 2)) {  // 2 months
+                        intervalMs = 2.628e+9;
+                        getStringFunc = (d: Date) => { return d.toLocaleString('default', { month: 'short' }); };
+                        firstDate.setDate(0);
+                        firstDate.setHours(0);
+                        firstDate.setMinutes(0);
+                        firstDate.setSeconds(0);
+                        firstDate.setMilliseconds(0);
+                    } else if (totalMs > 2.592e+8) {  // 3 days
+                        intervalMs = 8.64e+7;
+                        getStringFunc = (d: Date) => { return d.getMonth() + "/" + d.getDate() + "/" + d.getFullYear() };
+                        firstDate.setHours(0);
+                        firstDate.setMinutes(0);
+                        firstDate.setSeconds(0);
+                        firstDate.setMilliseconds(0);
+                    } else {
+                        intervalMs = 3.6e+6;
+                        getStringFunc = (d: Date) => { return d.getHours().toString() + ":00" };
+                        firstDate.setMinutes(0);
+                        firstDate.setSeconds(0);
+                        firstDate.setMilliseconds(0);
+                    }
+                    firstDate = new Date(firstDate.getTime() + intervalMs);
+
+                    let ticks = []
+                    for (let ms = firstDate.getTime(); ms < rightEdgeDate.getTime(); ms += intervalMs) {
+                        let curDat = new Date(ms);
+
+                        let leftPx = ((ms - timelineStruct.leftEdgeDate.getTime()) / 1000) / timelineStruct.secondsPerPixel;
+                        let text = getStringFunc(curDat);
+
+                        ticks.push({leftPx: leftPx, text: text});
+                    }
+
+                    return ticks.map((tick, i) => (
+                        <div className="timelineVerticalLine" style={{left: tick.leftPx}}></div>
+                    )).concat(ticks.map((tick, i) => (
+                        <p className="timelineTimeText" style={{left: tick.leftPx}}> {tick.text} </p>)))
+                })()
+            }
             {
                 timelineStruct.rows.map((goals, i) => (
                     (
