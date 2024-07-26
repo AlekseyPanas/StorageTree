@@ -17,20 +17,29 @@ import {d} from "@tauri-apps/api/http-43c39402";
 
 function fetchGoalData() {
     return [{
+        goalId: 0,
         title: "TestGoal",
-        criteria: "Do this goal!",
+        criteria: {
+            type: "taskbased",  // event, taskbased, timebased
+            dat: { desc: "Do this goal" }  // {desc: str}, {desc: str}, {task: str, timehours: int}
+        },
         success: ["+3B", "Candy"],
         failure: ["-3B / hr, +2B / hr"],
         startTime: new Date(2024, 7, 15, 5, 30, 3),
         deadline: new Date(2024, 7, 18, 5, 30, 3),
-        isDraft: false
+        isDraft: false,
+        sourceRecurrenceId: -1
     }];
 }
 
 function fetchRecurrenceData() {
     return [{
+        recurrenceId: 0,
         title: "TestRecurrenceGoal",
-        criteria: "Do this recurring thing!",
+        criteria: {
+            type: "taskbased",
+            dat: { desc: "Do this recurring thing!" }
+        },
         success: ["+5B", "Cake"],
         failure: ["-6B / hr, +1B / hr"],
         startTime: new Date(2024, 7, 15, 5, 30, 3),
@@ -48,7 +57,10 @@ function Timeline() {
             [
                 {
                     title: "TestGoal",
-                    criteria: "Do this goal!",
+                    criteria: {
+                        type: "event",
+                        desc: "Attend this event"
+                    },
                     success: ["+3B", "Candy"],
                     failure: ["-3B / hr, +2B / hr"],
                     startTime: new Date(2024, 7, 15, 5, 30, 3),
@@ -58,7 +70,10 @@ function Timeline() {
 
                 {
                     title: "TestGoal2",
-                    criteria: "Do this goal NOW!",
+                    criteria: {
+                        type: "timebased",
+                        desc: "Work on Paxos Research for 5 hours"
+                    },
                     success: ["+30B", "Candy2"],
                     failure: ["-3B / hr, +2B / hr"],
                     startTime: new Date(2024, 7, 19, 5, 30, 3),
@@ -70,7 +85,10 @@ function Timeline() {
             [
                 {
                     title: "TestRecurrenceGoal",
-                    criteria: "Do this goal!",
+                    criteria: {
+                        type: "taskbased",
+                        desc: "Do this goal!"
+                    },
                     success: ["+3B", "Candy"],
                     failure: ["-3B / hr, +2B / hr"],
                     startTime: new Date(2024, 7, 15, 15, 30, 3),
@@ -80,7 +98,10 @@ function Timeline() {
 
                 {
                     title: "TestRecurrenceGhost",
-                    criteria: "Do this goal NOW!",
+                    criteria: {
+                        type: "taskbased",
+                        desc: "Do this goal NOW!"
+                    },
                     success: ["+30B", "Candy2"],
                     failure: ["-3B / hr, +2B / hr"],
                     startTime: new Date(2024, 7, 19, 15, 30, 3),
@@ -90,6 +111,15 @@ function Timeline() {
             ]
         ]
     });
+
+    function fetchAndComputeTimeline() {
+        let goals = fetchGoalData();
+        let recurrences = fetchRecurrenceData();
+
+        for (let rec in recurrences) {
+
+        }
+    }
 
     let parentRefs = timelineStruct.rows.map((goals, i) => (
         useRef(null)
@@ -116,7 +146,7 @@ function Timeline() {
     }
 
     function timeScale(event) {
-        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel + event.deltaY});
+        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY)});
     }
 
     let dragPosRecord = useRef(0);
@@ -132,10 +162,7 @@ function Timeline() {
         event.preventDefault();
         if (isDragging.current) {
             let diffPx = event.screenX - dragPosRecord.current;
-            let newLeftEdge = new Date(0);
-            newLeftEdge.setUTCMilliseconds(
-                timelineStruct.leftEdgeDate.getTime() - (diffPx * timelineStruct.secondsPerPixel * 1000)
-            );
+            let newLeftEdge = new Date(timelineStruct.leftEdgeDate.getTime() - (diffPx * timelineStruct.secondsPerPixel * 1000));
             setTimelineStruct({...timelineStruct, leftEdgeDate: newLeftEdge})
             dragPosRecord.current = event.screenX;
         }
@@ -224,11 +251,14 @@ function Timeline() {
                                             <GoalBlock
                                                 key={i + "," + j}
                                                 goalTitle={goal.title}
-                                                goalCriteria={goal.criteria}
+                                                goalCriteria={goal.criteria.desc}
                                                 goalSuccess={goal.success}
                                                 goalFailure={goal.failure}
                                                 leftOffsetPx={goalStartPx}
                                                 widthPx={diffPx}
+                                                goalType={goal.criteria.type}
+                                                goalColor={"darksalmon"}
+                                                isGhost={goal.isRecurrenceGhost}
                                             ></GoalBlock>
                                         </div>
                                     )
