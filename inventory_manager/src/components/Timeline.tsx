@@ -4,18 +4,49 @@ import {useEffect, useRef, useState} from "react";
 import {i} from "@tauri-apps/api/fs-6ad2a328";
 import {d} from "@tauri-apps/api/http-43c39402";
 
-// fn fetch_goal_data() -> Goal[]
-// - Fetch all goals from DB
-//
-// fn fetch_recurrences() -> Recurrence[]
-// - Fetch all recurrences from DB
-//
-// fn build_timeline_structure(Goal[], Recurrence[]) -> GoalBlock[]
-// - Converts goals and recurrences into the timetable structure
-// - More precisely, determines the row each goal and recurrence lives on
-// - Saves this data to timeline_structure
+interface GoalDat {
+    goalId: number,
+    title: string,
+    criteria: object,
+    success: string[],
+    failure: string[],
+    startTime: Date,
+    deadline: Date,
+    isDraft: boolean,
+    sourceRecurrenceId: number
+}
 
-function fetchGoalData() {
+interface RecurrenceDat {
+    recurrenceId: number,
+    title: string,
+    criteria: object,
+    success: string[],
+    failure: string[],
+    startTime: Date,
+    goalLengthSeconds: number,
+    goalSpawnInterval: number,
+    isDraft: boolean
+}
+
+interface ParsedCriteria {
+    type: string,
+    desc: string
+}
+
+interface ParsedGoal {
+    title: string,
+    criteria: ParsedCriteria,
+    success: string[],
+    failure: string[],
+    startTime: Date,
+    deadline: Date,
+    isRecurrenceGhost: boolean
+}
+
+/**
+ * Return a list of goal objects fetched from backend repository
+ */
+function fetchGoalData(): GoalDat[] {
     return [{
         goalId: 0,
         title: "TestGoal",
@@ -32,7 +63,10 @@ function fetchGoalData() {
     }];
 }
 
-function fetchRecurrenceData() {
+/**
+ * Return a list of recurrence objects fetched from backend repository
+ */
+function fetchRecurrenceData(): RecurrenceDat[] {
     return [{
         recurrenceId: 0,
         title: "TestRecurrenceGoal",
@@ -43,83 +77,28 @@ function fetchRecurrenceData() {
         success: ["+5B", "Cake"],
         failure: ["-6B / hr, +1B / hr"],
         startTime: new Date(2024, 7, 15, 5, 30, 3),
-        goalLengthSeconds: 108000,
-        goalSpawnInterval: 201600,
+        goalLengthSeconds: 108000,  // seconds
+        goalSpawnInterval: 201600,  // seconds
         isDraft: false
     }];
 }
 
 function Timeline() {
+    const [goalData, setGoalData] = useState<GoalDat[]>(fetchGoalData());
+    const [recurrenceData, setRecurrenceData] = useState<RecurrenceDat[]>(fetchRecurrenceData());
     const [timelineStruct, setTimelineStruct] = useState({
         secondsPerPixel: 20,
         leftEdgeDate: new Date(2024, 7, 14, 2, 0, 0),
-        rows: [
-            [
-                {
-                    title: "TestGoal",
-                    criteria: {
-                        type: "event",
-                        desc: "Attend this event"
-                    },
-                    success: ["+3B", "Candy"],
-                    failure: ["-3B / hr, +2B / hr"],
-                    startTime: new Date(2024, 7, 15, 5, 30, 3),
-                    deadline: new Date(2024, 7, 18, 5, 30, 3),
-                    isRecurrenceGhost: false
-                },
-
-                {
-                    title: "TestGoal2",
-                    criteria: {
-                        type: "timebased",
-                        desc: "Work on Paxos Research for 5 hours"
-                    },
-                    success: ["+30B", "Candy2"],
-                    failure: ["-3B / hr, +2B / hr"],
-                    startTime: new Date(2024, 7, 19, 5, 30, 3),
-                    deadline: new Date(2024, 7, 20, 5, 30, 3),
-                    isRecurrenceGhost: false
-                }
-            ],
-
-            [
-                {
-                    title: "TestRecurrenceGoal",
-                    criteria: {
-                        type: "taskbased",
-                        desc: "Do this goal!"
-                    },
-                    success: ["+3B", "Candy"],
-                    failure: ["-3B / hr, +2B / hr"],
-                    startTime: new Date(2024, 7, 15, 15, 30, 3),
-                    deadline: new Date(2024, 7, 18, 15, 30, 3),
-                    isRecurrenceGhost: false
-                },
-
-                {
-                    title: "TestRecurrenceGhost",
-                    criteria: {
-                        type: "taskbased",
-                        desc: "Do this goal NOW!"
-                    },
-                    success: ["+30B", "Candy2"],
-                    failure: ["-3B / hr, +2B / hr"],
-                    startTime: new Date(2024, 7, 19, 15, 30, 3),
-                    deadline: new Date(2024, 7, 20, 15, 30, 3),
-                    isRecurrenceGhost: true
-                }
-            ]
-        ]
+        rows: [[{
+            title: "hi",
+            criteria: {type: "event", desc: "test"},
+            success: ["test"],
+            failure: ["test"],
+            startTime: new Date(2024, 7, 14, 2, 0, 0),
+            deadline: new Date(2024, 7, 14, 3, 0, 0),
+            isRecurrenceGhost: false
+        }]]
     });
-
-    function fetchAndComputeTimeline() {
-        let goals = fetchGoalData();
-        let recurrences = fetchRecurrenceData();
-
-        for (let rec in recurrences) {
-
-        }
-    }
 
     let parentRefs = timelineStruct.rows.map((goals, i) => (
         useRef(null)
@@ -133,6 +112,95 @@ function Timeline() {
     let containerRef = useRef(null);
     let [containerWidth, setContainerWidth] = useState(0);
 
+    let dragPosRecord = useRef(0);
+    let isDragging = useRef(false);
+
+    /**
+     * Fetches data from backend and sets it to state variables
+     */
+    function fetchData() {
+        setGoalData(fetchGoalData());
+        setRecurrenceData(fetchRecurrenceData());
+    }
+
+    /**
+     * Criteria can be slightly different depending on type. This returns the criteria
+     * as an object with a description parsed into a string
+     */
+    function getParsedCriteria(criteria: object): ParsedCriteria {
+        let desc;
+        if (criteria.type === "timebased") {
+            desc = "Work on " + criteria.dat.task + " for " + criteria.dat.timehours + " hours";
+        } else {
+            desc = criteria.dat.desc;
+        }
+        return {type: criteria.type, desc: desc};
+    }
+
+    /**
+     * Using timeline data computes the date at the right edge of the timeline window
+     */
+    function getRightEdgeDate() {
+        let totalMs = timelineStruct.secondsPerPixel * containerWidth * 1000;
+        return new Date(timelineStruct.leftEdgeDate.getTime() + totalMs);
+    }
+
+    /**
+     * Given the start date epoch of the latest goal generated from the recurrence rec,
+     * return a list of parsed ghost goals ready for timeline use ending before the given date
+     */
+    function generateGhostRecurrenceGoals(latestGeneratedEpoch: number, before: Date, rec: RecurrenceDat): ParsedGoal[] {
+        let ghostGoals = [];
+        for (let i = latestGeneratedEpoch + rec.goalSpawnInterval; i <= before.getTime(); i += rec.goalSpawnInterval) {
+            ghostGoals.push({
+                title: rec.title,
+                criteria: getParsedCriteria(rec.criteria),
+                success: rec.success,
+                failure: rec.failure,
+                startTime: new Date(i),
+                deadline: new Date(i + (rec.goalLengthSeconds * 1000)),
+                isRecurrenceGhost: true
+            });
+        }
+        return ghostGoals;
+    }
+
+    /**
+     * Using stored fetched goal and recurrence data, update the 'rows' element of
+     * the timeline struct
+     * */
+    function getUpdatedTimelineRows(): ParsedGoal[][] {
+        let rows = [];
+
+        for (let rec of recurrenceData) {
+            let row = [];
+            let latestEpoch = 0;
+            for (let goal of goalData) {
+                if (goal.sourceRecurrenceId === rec.recurrenceId) {
+                    row.push({
+                        title: goal.title,
+                        criteria: getParsedCriteria(goal.criteria),
+                        success: goal.success,
+                        failure: goal.failure,
+                        startTime: goal.startTime,
+                        deadline: goal.deadline,
+                        isRecurrenceGhost: false
+                    });
+                    if (goal.deadline.getTime() > latestEpoch) {
+                        latestEpoch = goal.deadline.getTime();
+                    }
+                }
+            }
+            row = row.concat(generateGhostRecurrenceGoals(latestEpoch, getRightEdgeDate(), rec));
+            rows.push(row);
+        }
+
+        return rows;
+    }
+
+    /**
+     * Update height of rows based on goals within them
+     */
     function updateHeight() {
         for (let i = 0; i < parentRefs.length; i++) {
             let height = 0;
@@ -147,10 +215,9 @@ function Timeline() {
 
     function timeScale(event) {
         setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY)});
+        resizeHandler();
+        console.log("timescale");
     }
-
-    let dragPosRecord = useRef(0);
-    let isDragging = useRef(false);
 
     function mouseDownHandler(event) {
         event.preventDefault();
@@ -176,13 +243,22 @@ function Timeline() {
     function resizeHandler() {
         updateHeight();
         setContainerWidth(containerRef.current.offsetWidth);
+        console.log("resizeHandler")
     }
 
     useEffect(() => {
         resizeHandler();
+        fetchData();
+        //setTimelineStruct({...timelineStruct, rows: getUpdatedTimelineRows()});
+    }, []);
+
+    useEffect(() => {
         window.addEventListener("resize", resizeHandler);
         window.addEventListener("wheel", timeScale);
-    });
+        console.log("useEffect");
+
+        // Perform initial fetch
+    }, [resizeHandler, timeScale]);
 
     return (
         <div ref={containerRef} id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler}
