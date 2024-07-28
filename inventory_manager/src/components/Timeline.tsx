@@ -1,6 +1,6 @@
 import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
-import {useEffect, useRef, useState} from "react";
+import {createRef, useEffect, useRef, useState} from "react";
 import {i} from "@tauri-apps/api/fs-6ad2a328";
 import {d} from "@tauri-apps/api/http-43c39402";
 
@@ -76,9 +76,9 @@ function fetchRecurrenceData(): RecurrenceDat[] {
         },
         success: ["+5B", "Cake"],
         failure: ["-6B / hr, +1B / hr"],
-        startTime: new Date(2024, 7, 15, 5, 30, 3),
-        goalLengthSeconds: 108000,  // seconds
-        goalSpawnInterval: 201600,  // seconds
+        startTime: new Date(2024, 7, 12, 5, 30, 3),
+        goalLengthSeconds: 108000 / 2,  // seconds
+        goalSpawnInterval: 201600 / 2,  // seconds
         isDraft: false
     }];
 }
@@ -100,20 +100,24 @@ function Timeline() {
         }]]
     });
 
-    let parentRefs = timelineStruct.rows.map((goals, i) => (
-        useRef(null)
-    ));
-    let childRefs = timelineStruct.rows.map((goals, i) => (
-        goals.map((goal, j) => (
-            useRef(null)
-        ))
-    ));
+    let parentRefs = useRef([]);
+    let childRefs = useRef([]);
+    updateChildAndParentRefArrays();
 
     let containerRef = useRef(null);
     let [containerWidth, setContainerWidth] = useState(0);
 
     let dragPosRecord = useRef(0);
     let isDragging = useRef(false);
+
+    function updateChildAndParentRefArrays() {
+        parentRefs.current = timelineStruct.rows.map((goals, i) => null);
+        childRefs.current = timelineStruct.rows.map((goals, i) => (
+            goals.map((goal, j) => null)
+        ));
+        //console.log(childRefs, parentRefs);
+        console.log("1");
+    }
 
     /**
      * Fetches data from backend and sets it to state variables
@@ -147,11 +151,13 @@ function Timeline() {
 
     /**
      * Given the start date epoch of the latest goal generated from the recurrence rec,
-     * return a list of parsed ghost goals ready for timeline use ending before the given date
+     * return a list of parsed ghost goals ready for timeline use ending before the given date.
+     * if latestGeneratedEpoch = 0, then assume recurrence has not yet spawned any goals
      */
     function generateGhostRecurrenceGoals(latestGeneratedEpoch: number, before: Date, rec: RecurrenceDat): ParsedGoal[] {
         let ghostGoals = [];
-        for (let i = latestGeneratedEpoch + rec.goalSpawnInterval; i <= before.getTime(); i += rec.goalSpawnInterval) {
+        let start = latestGeneratedEpoch === 0 ? rec.startTime.getTime() : latestGeneratedEpoch + (rec.goalSpawnInterval * 1000);
+        for (let i = start; i <= before.getTime(); i += rec.goalSpawnInterval * 1000) {
             ghostGoals.push({
                 title: rec.title,
                 criteria: getParsedCriteria(rec.criteria),
@@ -173,10 +179,10 @@ function Timeline() {
         let rows = [];
 
         for (let rec of recurrenceData) {
-            let row = [];
-            let latestEpoch = 0;
-            for (let goal of goalData) {
-                if (goal.sourceRecurrenceId === rec.recurrenceId) {
+             let row = [];
+             let latestEpoch = 0;
+             for (let goal of goalData) {
+                 if (goal.sourceRecurrenceId === rec.recurrenceId) {
                     row.push({
                         title: goal.title,
                         criteria: getParsedCriteria(goal.criteria),
@@ -189,10 +195,10 @@ function Timeline() {
                     if (goal.deadline.getTime() > latestEpoch) {
                         latestEpoch = goal.deadline.getTime();
                     }
-                }
-            }
-            row = row.concat(generateGhostRecurrenceGoals(latestEpoch, getRightEdgeDate(), rec));
-            rows.push(row);
+                 }
+             }
+             row = row.concat(generateGhostRecurrenceGoals(latestEpoch, getRightEdgeDate(), rec));
+             rows.push(row);
         }
 
         return rows;
@@ -202,21 +208,21 @@ function Timeline() {
      * Update height of rows based on goals within them
      */
     function updateHeight() {
-        for (let i = 0; i < parentRefs.length; i++) {
+        for (let i = 0; i < parentRefs.current.length; i++) {
             let height = 0;
-            for (let j = 0; j < childRefs[i].length; j++) {
-                if (childRefs[i][j].current.offsetHeight > height) {
-                    height = childRefs[i][j].current.offsetHeight;
+            for (let j = 0; j < childRefs.current[i].length; j++) {
+                if (childRefs.current[i][j] !== null && childRefs.current[i][j].offsetHeight > height) {
+                    height = childRefs.current[i][j].offsetHeight;
                 }
             }
-            parentRefs[i].current.style.height = height + "px";
+            parentRefs.current[i].style.height = height + "px";
         }
+        console.log("height update");
     }
 
     function timeScale(event) {
-        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY)});
-        resizeHandler();
-        console.log("timescale");
+        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY),
+            rows: getUpdatedTimelineRows()});
     }
 
     function mouseDownHandler(event) {
@@ -241,24 +247,29 @@ function Timeline() {
     }
 
     function resizeHandler() {
-        updateHeight();
         setContainerWidth(containerRef.current.offsetWidth);
-        console.log("resizeHandler")
     }
 
     useEffect(() => {
         resizeHandler();
         fetchData();
-        //setTimelineStruct({...timelineStruct, rows: getUpdatedTimelineRows()});
+        setTimelineStruct({...timelineStruct, rows: getUpdatedTimelineRows()});
     }, []);
 
     useEffect(() => {
         window.addEventListener("resize", resizeHandler);
         window.addEventListener("wheel", timeScale);
-        console.log("useEffect");
-
-        // Perform initial fetch
     }, [resizeHandler, timeScale]);
+
+    useEffect(() => {
+        updateHeight();
+    }, [timelineStruct]);
+
+    useEffect(() => {
+        //console.log(childRefs, parentRefs);
+        console.log("3");
+        console.log("");
+    });
 
     return (
         <div ref={containerRef} id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler}
@@ -314,7 +325,7 @@ function Timeline() {
             {
                 timelineStruct.rows.map((goals, i) => (
                     (
-                        <div className="timelineRow" ref={parentRefs[i]}>
+                        <div className="timelineRow" ref={(el) => {console.log("2");parentRefs.current[i] = el;}}>
                             {
                                 goals.map((goal, j) => {
                                     let goalStartMs = goal.startTime.getTime();
@@ -323,7 +334,7 @@ function Timeline() {
                                     let diffPx = diffMs / (timelineStruct.secondsPerPixel * 1000);
                                     let goalStartPx = (goalStartMs - leftEdgeMs) / (timelineStruct.secondsPerPixel * 1000);
                                     return (
-                                        <div className="goalBlockOuterContainer" ref={childRefs[i][j]}>
+                                        <div className="goalBlockOuterContainer" ref={(el) => {childRefs.current[i][j] = el;}}>
                                             <GoalBlock
                                                 key={i + "," + j}
                                                 goalTitle={goal.title}
