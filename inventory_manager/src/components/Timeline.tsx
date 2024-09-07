@@ -89,16 +89,8 @@ function Timeline() {
     const [timelineStruct, setTimelineStruct] = useState({
         secondsPerPixel: 20,
         leftEdgeDate: new Date(2024, 7, 14, 2, 0, 0),
-        rows: [[{
-            title: "hi",
-            criteria: {type: "event", desc: "test"},
-            success: ["test"],
-            failure: ["test"],
-            startTime: new Date(2024, 7, 14, 2, 0, 0),
-            deadline: new Date(2024, 7, 14, 3, 0, 0),
-            isRecurrenceGhost: false
-        }]]
     });
+    const [timelineRows, setTimelineRows] = useState<ParsedGoal[][]>([]);
 
     let parentRefs = useRef([]);
     let childRefs = useRef([]);
@@ -111,8 +103,8 @@ function Timeline() {
     let isDragging = useRef(false);
 
     function updateChildAndParentRefArrays() {
-        parentRefs.current = timelineStruct.rows.map((goals, i) => null);
-        childRefs.current = timelineStruct.rows.map((goals, i) => (
+        parentRefs.current = timelineRows.map((goals, i) => null);
+        childRefs.current = timelineRows.map((goals, i) => (
             goals.map((goal, j) => null)
         ));
         //console.log(childRefs, parentRefs);
@@ -221,8 +213,8 @@ function Timeline() {
     }
 
     function timeScale(event) {
-        setTimelineStruct({...timelineStruct, secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY),
-            rows: getUpdatedTimelineRows()});
+        setTimelineStruct({...timelineStruct,
+            secondsPerPixel: timelineStruct.secondsPerPixel * Math.pow(1.003, event.deltaY)});
     }
 
     function mouseDownHandler(event) {
@@ -253,7 +245,7 @@ function Timeline() {
     useEffect(() => {
         resizeHandler();
         fetchData();
-        setTimelineStruct({...timelineStruct, rows: getUpdatedTimelineRows()});
+        setTimelineRows(getUpdatedTimelineRows());
     }, []);
 
     useEffect(() => {
@@ -262,8 +254,12 @@ function Timeline() {
     }, [resizeHandler, timeScale]);
 
     useEffect(() => {
-        updateHeight();
+        setTimelineRows(getUpdatedTimelineRows());
     }, [timelineStruct]);
+
+    useEffect(() => {
+        updateHeight();
+    }, [timelineRows]);
 
     useEffect(() => {
         //console.log(childRefs, parentRefs);
@@ -323,7 +319,7 @@ function Timeline() {
                 })()
             }
             {
-                timelineStruct.rows.map((goals, i) => (
+                timelineRows.map((goals, i) => (
                     (
                         <div className="timelineRow" ref={(el) => {console.log("2");parentRefs.current[i] = el;}}>
                             {
