@@ -59,7 +59,7 @@ Horizontal timetable
 - A goal comes with a "strategy", which is essentially a list of subgoals.
 
     - Subgoals can only exist within the timebound of the parent goal. Therefore, subgoals will always expire before
-    the parent goal. Recurring subgoals recur up to the last possible recurrance without exceeding parent timebound
+    the parent goal. Recurring subgoals recur up to the last possible recurrence without exceeding parent timebound
 
     Examples:
     - Get P3 (taskbased) { fulfill requirements (taskbased) { go fly {timebased} }, take exam (event), do SIV (event), get signed off (event) }
@@ -120,9 +120,9 @@ A goal must be time-based for this to work, since a task-based goal may take lon
     into the criteria progress for the parent goal
     - Record time: A time-based goal has a nice UI to record time you've committed to the goal so far
     - Checklist: Criteria can have an embedded checklist which saves state of checked items
-    - Checklist goal link: A checklist item can link to subgoal and will automatically get checked off if that subgoal
+    - Checklist goal link: A checklist item can link to subgoal and will automatically get checked off if that subgoal has succeeded (or show a red X if the goal has failed)
     - Text: Criteria is sometimes just a line of text instructions
-    has succeeded (or show a red X if the goal has failed)
+
 
 - Draft goals: It is often useful to have a goal be partially created but not yet active. For example, you know you'll
 go on a hike in the next year, but you have no clue when. You dont want the goal to be evaluated for failure or success

@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod repository;
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -15,7 +17,7 @@ fn main() {
 }
 
 /*
-Plan:
+Frontend Plan:
 
 fn fetch_goal_data() -> Goal[]
     - Fetch all goals from DB
@@ -56,5 +58,14 @@ App:
     Success List Modal:  // Reads from success_list
     Recurrence context menu:  // Reads position and is_enabled from recurrence_context
     Goal context menu:  // same but with goal_context
+
+
+Calming Notion of Goal Resolution:
+    - Goals exist as some piece of data with some timebound and some completion status
+    - Notice how this is completely irrespective of what time it is now
+    - At any time you may resolve a goal, execute its callbacks, and this may add, move, or change things in the timeline
+    - Again, notice how the current time doesn't matter
+    - Now on the app level, resolving simply means searching for unresolved expired goals, executing their callbacks, changing
+    their state to resolved, checking again for expired goals, and repeating this until no expired goals remain
 
 */

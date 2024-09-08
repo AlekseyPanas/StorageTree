@@ -1,8 +1,6 @@
 import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
 import {createRef, useEffect, useRef, useState} from "react";
-import {i} from "@tauri-apps/api/fs-6ad2a328";
-import {d} from "@tauri-apps/api/http-43c39402";
 
 interface GoalDat {
     goalId: number,
@@ -29,7 +27,7 @@ interface RecurrenceDat {
 }
 
 interface ParsedCriteria {
-    type: string,
+    type: string,  // One of "taskbased", "timebased"
     desc: string
 }
 
@@ -270,7 +268,9 @@ function Timeline() {
     return (
         <div ref={containerRef} id="timelineContainer" onMouseDown={mouseDownHandler} onMouseUp={mouseUpHandler}
              onMouseMove={mouseMoveHandler}>
+
             {
+                // Creates time ticks above the timeline
                 (() => {
                     let totalMs = timelineStruct.secondsPerPixel * containerWidth * 1000;
                     let rightEdgeDate = new Date(timelineStruct.leftEdgeDate.getTime() + totalMs);
@@ -318,7 +318,9 @@ function Timeline() {
                         <p className="timelineTimeText" style={{left: tick.leftPx}}> {tick.text} </p>)))
                 })()
             }
+
             {
+                // Goal block rows
                 timelineRows.map((goals, i) => (
                     (
                         <div className="timelineRow" ref={(el) => {console.log("2");parentRefs.current[i] = el;}}>
