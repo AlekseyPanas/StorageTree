@@ -25,7 +25,8 @@ enum GoalDeleteCode {
 enum GoalCompletionStatus {
     Incomplete,
     Succeeded,
-    Failed
+    Failed,
+    Deleted
 }
 
 ///
@@ -169,85 +170,113 @@ impl InMemoryRepo {
         inner_start >= outer_start && inner_start <= outer_end
     }
 
-    fn test(&self) -> bool { true }
-}
-
-impl IRepo for InMemoryRepo {
-    fn create_edit_timebased_goal(&mut self, goal_dat: &TimebasedGoal) -> CreateGoalCode {
+    fn __create_edit_helper(&self, goal_dat: &Goal) -> (bool, CreateGoalCode) {
         // Check parent bounds
-        if (goal_dat.goal.parent_id != 0) {
-            let (code, goal) = self.get_goal_by_id(goal_dat.goal.parent_id);
+        if (goal_dat.parent_id != 0) {
+            let (code, goal) = self.get_goal_by_id(goal_dat.parent_id);
             if (!InMemoryRepo::is_within_bounds(goal.start_unix_timestamp, goal.end_unix_timestamp,
-                                                goal_dat.goal.start_unix_timestamp, goal_dat.goal.end_unix_timestamp)) {
-                return CreateGoalCode::FailureSubgoalOutsideParentTimebound;
+                                                goal_dat.start_unix_timestamp, goal_dat.end_unix_timestamp)) {
+                return (false, CreateGoalCode::FailureSubgoalOutsideParentTimebound);
             }
         }
 
         // Edit mode
-        if (goal_dat.goal.goal_id != 0) {
+        if (goal_dat.goal_id != 0) {
 
             // Check that new timebound doesn't put any subgoals outside
-            let subgoals = self.get_immediate_subgoals(goal_dat.goal.goal_id);
+            let subgoals = self.get_immediate_subgoals(goal_dat.goal_id);
             for subgoal in subgoals {
                 if (!InMemoryRepo::is_within_bounds(
-                    goal_dat.goal.start_unix_timestamp, goal_dat.goal.end_unix_timestamp,
+                    goal_dat.start_unix_timestamp, goal_dat.end_unix_timestamp,
                     subgoal.start_unix_timestamp, subgoal.end_unix_timestamp
                 )) {
-                    return CreateGoalCode::FailureNewTimeboundSmallerThanSubgoals;
+                    return (false, CreateGoalCode::FailureNewTimeboundSmallerThanSubgoals);
                 }
             }
 
             // Check that the correct goal type is being edited
             if (!self.is_timebased(goal_dat.goal.goal_id)) {
-                return CreateGoalCode::FailureEditingGoalOfIncorrectType;
+                return (false, CreateGoalCode::FailureEditingGoalOfIncorrectType);
             }
 
-            // Perform edit
-            for i in 0..self.timebased_goals.len() {
-                if (self.timebased_goals[i].goal.goal_id == goal_dat.goal.goal_id) {
-                    self.timebased_goals[i].goal.start_unix_timestamp = goal_dat.goal.start_unix_timestamp;
-                    self.timebased_goals[i].goal.end_unix_timestamp = goal_dat.goal.end_unix_timestamp;
-                    self.timebased_goals[i].goal.failure_callback = goal_dat.goal.failure_callback.clone();
-                    self.timebased_goals[i].goal.success_callback = goal_dat.goal.success_callback.clone();
-                    self.timebased_goals[i].goal.finally_callback = goal_dat.goal.finally_callback.clone();
-                    self.timebased_goals[i].criteria.feed = goal_dat.criteria.feed;
-                    self.timebased_goals[i].criteria.time_ms = goal_dat.criteria.time_ms;
-                    self.timebased_goals[i].criteria.task = goal_dat.criteria.task.clone();
-                    self.timebased_goals[i].criteria.link_id = goal_dat.criteria.link_id;
-                    break;
-                }
-            }
-
-            return CreateGoalCode::Success;
+            return (true, CreateGoalCode::Success);
         }
 
         // Create mode
         else {
-            self.timebased_goals.push(Goal {
-                parent_id: goal_dat.goal.parent_id,
-                goal_id: self.get_next_free_id(),
-                start_unix_timestamp: goal_dat.goal.start_unix_timestamp,
-                end_unix_timestamp: goal_dat.goal.end_unix_timestamp,
-                failure_callback: goal_dat.goal.failure_callback.clone(),
-                success_callback: goal_dat.goal.success_callback.clone(),
-                finally_callback: goal_dat.goal.finally_callback.clone(),
-                completion_status: GoalCompletionStatus::Incomplete
-            });
+            return (false, CreateGoalCode::Success);
+        }
+    }
+}
 
-            return CreateGoalCode::Success;
+impl IRepo for InMemoryRepo {
+    fn create_edit_timebased_goal(&mut self, goal_dat: &TimebasedGoal) -> CreateGoalCode {
+        let (is_edit, code) = self.__create_edit_helper(&goal_dat.goal);
+
+        if (code == CreateGoalCode::Success) {
+            if (is_edit) {
+                // Perform edit
+                for i in 0..self.timebased_goals.len() {
+                    if (self.timebased_goals[i].goal.goal_id == goal_dat.goal.goal_id) {
+                        self.timebased_goals[i].goal.start_unix_timestamp = goal_dat.goal.start_unix_timestamp;
+                        self.timebased_goals[i].goal.end_unix_timestamp = goal_dat.goal.end_unix_timestamp;
+                        self.timebased_goals[i].goal.failure_callback = goal_dat.goal.failure_callback.clone();
+                        self.timebased_goals[i].goal.success_callback = goal_dat.goal.success_callback.clone();
+                        self.timebased_goals[i].goal.finally_callback = goal_dat.goal.finally_callback.clone();
+                        self.timebased_goals[i].criteria.feed = goal_dat.criteria.feed;
+                        self.timebased_goals[i].criteria.time_ms = goal_dat.criteria.time_ms;
+                        self.timebased_goals[i].criteria.task = goal_dat.criteria.task.clone();
+                        self.timebased_goals[i].criteria.link_id = goal_dat.criteria.link_id;
+                        break;
+                    }
+                }
+                return code;
+            } else {
+                self.timebased_goals.push(goal_dat);
+                self.timebased_goals[-1].goal.goal_id = self.get_next_free_id();
+                return code;
+            }
+        } else {
+            return code;
         }
     }
 
-    fn create_edit_taskbased_goal(&self, goal_dat: &TaskbasedGoal) -> CreateGoalCode {
-        todo!()
+    fn create_edit_taskbased_goal(&mut self, goal_dat: &TaskbasedGoal) -> CreateGoalCode {
+        let (is_edit, code) = self.__create_edit_helper(&goal_dat.goal);
+
+        if (code == CreateGoalCode::Success) {
+            if (is_edit) {
+                // Perform edit
+                for i in 0..self.timebased_goals.len() {
+                    if (self.taskbased_goals[i].goal.goal_id == goal_dat.goal.goal_id) {
+                        self.taskbased_goals[i].goal.start_unix_timestamp = goal_dat.goal.start_unix_timestamp;
+                        self.taskbased_goals[i].goal.end_unix_timestamp = goal_dat.goal.end_unix_timestamp;
+                        self.taskbased_goals[i].goal.failure_callback = goal_dat.goal.failure_callback.clone();
+                        self.taskbased_goals[i].goal.success_callback = goal_dat.goal.success_callback.clone();
+                        self.taskbased_goals[i].goal.finally_callback = goal_dat.goal.finally_callback.clone();
+                        self.taskbased_goals[i].criteria = goal_dat.criteria.clone();
+                        break;
+                    }
+                }
+                return code;
+            } else {
+                self.taskbased_goals.push(goal_dat);
+                self.taskbased_goals[-1].goal.goal_id = self.get_next_free_id();
+                return code;
+            }
+        } else {
+            return code;
+        }
     }
 
-    fn create_edit_timebased_recurrence(&self, recurrence_dat: TimebasedRecurrence) -> bool {
-        todo!()
+    fn create_edit_timebased_recurrence(&mut self, recurrence_dat: TimebasedRecurrence) -> bool {
+        self.timebased_recurrences.push(recurrence_dat);
+        return true;
     }
 
-    fn create_edit_taskbased_recurrence(&self, recurrence_dat: TaskbasedRecurrence) -> bool {
-        todo!()
+    fn create_edit_taskbased_recurrence(&mut self, recurrence_dat: TaskbasedRecurrence) -> bool {
+        self.taskbased_recurrences.push(recurrence_dat);
+        return true;
     }
 
     fn delete_goal(&self, goal_id: u128) -> GoalDeleteCode {
