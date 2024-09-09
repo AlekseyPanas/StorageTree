@@ -70,4 +70,8 @@ Calming Notion of Goal Resolution:
     - Now on the app level, resolving simply means searching for unresolved expired goals, executing their callbacks, changing
     their state to resolved, checking again for expired goals, and repeating this until no expired goals remain
 
+    - Recurrences are functions that spawn new goals and track goals that have already been spawned to know which next ones to spawn
+    - Note how this is irrespective of current time
+    - You can tell a recurrence to spawn goals up to a certain time
+    - This is irrespective of current time and can be called anytime with any value
 */
