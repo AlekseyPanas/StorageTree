@@ -37,7 +37,7 @@ enum CheckUncheckTaskbasedCriteriaCode {
     FailureGoalIsTimebased
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 enum GoalCompletionStatus {
     Incomplete,
     Succeeded,
@@ -142,13 +142,13 @@ trait IRepo {
     fn get_expired_goal_ids(&self, cur_time_unix_timestamp: u128) -> Vec<u128>;
 
     ///
-    fn get_timebased_goal_by_id(&self, goal_id: u128) -> (GetGoalCode, TimebasedGoal);
+    fn get_timebased_goal_by_id(&self, goal_id: u128) -> (GetGoalCode, Option<TimebasedGoal>);
 
     ///
-    fn get_taskbased_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, TaskbasedGoal);
+    fn get_taskbased_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Option<TaskbasedGoal>);
 
     ///
-    fn get_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Goal);
+    fn get_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Option<Goal>);
 
     /// Include only goals that have a completion status within filter. If filter is an empty array then include all
     /// Include only goals which intersect with the provided start, end interval. 0 for both start and end will return all goals
@@ -203,7 +203,7 @@ impl InMemoryRepo<'static> {
         // Check parent bounds
         if goal_dat.parent_id != 0 {
             let (code, goal) = self.get_goal_by_id(goal_dat.parent_id);
-            if !InMemoryRepo::__is_within_bounds(goal.start_unix_timestamp, goal.end_unix_timestamp,
+            if !InMemoryRepo::__is_within_bounds(goal.unwrap().start_unix_timestamp, goal.unwrap().end_unix_timestamp,
                                                   goal_dat.start_unix_timestamp, goal_dat.end_unix_timestamp) {
                 return (false, CreateGoalCode::FailureSubgoalOutsideParentTimebound);
             }
@@ -435,15 +435,41 @@ impl IRepo for InMemoryRepo<'static> {
         return v;
     }
 
-    fn get_timebased_goal_by_id(&self, goal_id: u128) -> (GetGoalCode, TimebasedGoal) {
+    fn get_timebased_goal_by_id(&self, goal_id: u128) -> (GetGoalCode, Option<TimebasedGoal>) {
+        // Check that goal exists
+        if !self.does_goal_exist(goal_id) { return (GetGoalCode::FailureGoalDoesntExist, None); }
+        // Check that goal is timebased
+        if !self.is_timebased(goal_id) { return (GetGoalCode::FailureGoalIncorrectType, None); }
+
+        let (_, idx) = self.__get_index_of_goal(true, goal_id);
+
+        let g = self.timebased_goals[idx];
+        return (GetGoalCode::Success, Some(TimebasedGoal {
+            goal: &mut Goal {
+                parent_id: g.goal.parent_id,
+                goal_id: g.goal.goal_id,
+                start_unix_timestamp: g.goal.start_unix_timestamp,
+                end_unix_timestamp: g.goal.end_unix_timestamp,
+                failure_callback: g.goal.failure_callback,
+                success_callback: g.goal.success_callback,
+                finally_callback: g.goal.finally_callback,
+                completion_status: g.goal.completion_status
+            },
+            criteria: &mut TimebasedCriteria {
+                time_ms: g.criteria.time_ms,
+                link_id: g.criteria.link_id,
+                task: g.criteria.task.clone(),
+                feed: g.criteria.feed,
+                dedicated_time_ms: g.criteria.dedicated_time_ms
+            }
+        }))
+    }
+
+    fn get_taskbased_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Option<TaskbasedGoal>) {
         todo!()
     }
 
-    fn get_taskbased_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, TaskbasedGoal) {
-        todo!()
-    }
-
-    fn get_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Goal) {
+    fn get_goal_by_id(&self, goal_id: u128) -> &(GetGoalCode, Option<Goal>) {
         todo!()
     }
 
