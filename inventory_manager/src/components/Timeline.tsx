@@ -2,16 +2,39 @@ import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
 import {createRef, useEffect, useRef, useState} from "react";
 
+enum CompletionStatus {
+    INCOMPLETE,
+    SUCCEEDED,
+    FAILED,
+    DELETED
+}
+
+interface TimebasedCriteria {
+    timeMs: number,
+    linkId: number,
+    task: string,
+    feed: boolean,
+    dedicatedTimeMs: number
+}
+
+interface TaskbasedCriteriaItem {
+    description: string,
+    linkId: number,
+    isChecked: boolean
+}
+
 interface GoalDat {
+    parentId: number,
     goalId: number,
-    title: string,
-    criteria: object,
+    startUnixTimestamp: number,
+    endUnixTimestamp: number
+    goalName: string,
+    criteria: TimebasedCriteria | TaskbasedCriteriaItem[],
+    isTimebased: boolean,
     success: string[],
     failure: string[],
-    startTime: Date,
-    deadline: Date,
-    isDraft: boolean,
-    sourceRecurrenceId: number
+    final: string[],
+    completionStatus: CompletionStatus
 }
 
 interface RecurrenceDat {

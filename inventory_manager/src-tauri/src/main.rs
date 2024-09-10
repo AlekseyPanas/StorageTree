@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use crate::repository::{GoalCompletionStatus, IRepo, TaskbasedGoal};
+
 mod repository;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -10,7 +12,24 @@ fn greet(name: &str) -> String {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let mut repo = repository::InMemoryRepo::new();
+
+    repo.create_edit_taskbased_goal(TaskbasedGoal {
+        goal: repository::Goal {
+            parent_id: 0,
+            goal_id: 0,
+            start_unix_timestamp: 200,
+            end_unix_timestamp: 400,
+            failure_callback: vec![],
+            success_callback: vec![],
+            finally_callback: vec![],
+            completion_status: GoalCompletionStatus::Incomplete,
+        },
+        criteria: Vec::new(),
+        checked_indexes: Vec::new()
+    });
+
+    println!("{:?}", &repo.get_taskbased_goals(0, 0, &[]));
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet])
