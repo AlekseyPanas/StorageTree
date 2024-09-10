@@ -1,12 +1,19 @@
+use std::cmp::max;
 use std::process::id;
 
 #[derive(PartialEq, Eq)]
-enum CreateGoalCode {
+enum CreateEditGoalCode {
     Success,
     FailureSubgoalOutsideParentTimebound,
     FailureNewTimeboundSmallerThanSubgoals,
     FailureEditingGoalOfIncorrectType,
     FailureEditingGoalDoesntExist
+}
+
+#[derive(PartialEq, Eq)]
+enum CreateEditRecurrenceCode {
+    Success,
+    FailureEditingRecurrenceDoesntExist
 }
 
 #[derive(PartialEq, Eq)]
@@ -120,16 +127,16 @@ struct TaskbasedRecurrence {
 ///
 trait IRepo {
     ///
-    fn create_edit_timebased_goal(&mut self, goal_dat: TimebasedGoal) -> CreateGoalCode;
+    fn create_edit_timebased_goal(&mut self, goal_dat: TimebasedGoal) -> CreateEditGoalCode;
 
     ///
-    fn create_edit_taskbased_goal(&mut self, goal_dat: TaskbasedGoal) -> CreateGoalCode;
+    fn create_edit_taskbased_goal(&mut self, goal_dat: TaskbasedGoal) -> CreateEditGoalCode;
 
     ///
-    fn create_edit_timebased_recurrence(&mut self, recurrence_dat: TimebasedRecurrence) -> bool;
+    fn create_edit_timebased_recurrence(&mut self, recurrence_dat: TimebasedRecurrence) -> CreateEditRecurrenceCode;
 
     ///
-    fn create_edit_taskbased_recurrence(&mut self, recurrence_dat: TaskbasedRecurrence) -> bool;
+    fn create_edit_taskbased_recurrence(&mut self, recurrence_dat: TaskbasedRecurrence) -> CreateEditRecurrenceCode;
 
     ///
     fn delete_goal(&mut self, goal_id: u128) -> GoalDeleteCode;
@@ -203,7 +210,7 @@ trait IRepo {
 
     /// Get the number subgoals of the given goal at a depth of one. This means subgoals of subgoals are not included.
     /// Include only subgoals that have a completion status within filter. If filter is an empty array then include all
-    fn get_num_immediate_subgoals(&self, filter: &[GoalCompletionStatus]) -> usize;
+    fn get_num_immediate_subgoals(&self, goal_id: u128, filter: &[GoalCompletionStatus]) -> usize;
 }
 
 
@@ -231,13 +238,13 @@ impl InMemoryRepo {
             (bound1_end >= bound2_end && bound1_start <= bound2_start)
     }
 
-    fn __create_edit_helper(&self, goal_dat: &Goal) -> (bool, CreateGoalCode) {
+    fn __create_edit_helper(&self, goal_dat: &Goal) -> (bool, CreateEditGoalCode) {
         // Check parent bounds
         if goal_dat.parent_id != 0 {
             let (code, goal) = self.get_goal_by_id(goal_dat.parent_id);
             if !InMemoryRepo::__is_within_bounds(goal.as_ref().unwrap().start_unix_timestamp, goal.as_ref().unwrap().end_unix_timestamp,
                                                   goal_dat.start_unix_timestamp, goal_dat.end_unix_timestamp) {
-                return (false, CreateGoalCode::FailureSubgoalOutsideParentTimebound);
+                return (false, CreateEditGoalCode::FailureSubgoalOutsideParentTimebound);
             }
         }
 
@@ -246,7 +253,7 @@ impl InMemoryRepo {
 
             // Check that the goal exists
             if !self.does_goal_exist(goal_dat.goal_id) {
-                return (false, CreateGoalCode::FailureEditingGoalDoesntExist);
+                return (false, CreateEditGoalCode::FailureEditingGoalDoesntExist);
             }
 
             // Check that new timebound doesn't put any subgoals outside
@@ -256,21 +263,21 @@ impl InMemoryRepo {
                     goal_dat.start_unix_timestamp, goal_dat.end_unix_timestamp,
                     subgoal.start_unix_timestamp, subgoal.end_unix_timestamp
                 ) {
-                    return (false, CreateGoalCode::FailureNewTimeboundSmallerThanSubgoals);
+                    return (false, CreateEditGoalCode::FailureNewTimeboundSmallerThanSubgoals);
                 }
             }
 
             // Check that the correct goal type is being edited
             if !self.is_timebased_goal(goal_dat.goal_id) {
-                return (false, CreateGoalCode::FailureEditingGoalOfIncorrectType);
+                return (false, CreateEditGoalCode::FailureEditingGoalOfIncorrectType);
             }
 
-            return (true, CreateGoalCode::Success);
+            return (true, CreateEditGoalCode::Success);
         }
 
         // Create mode
         else {
-            return (false, CreateGoalCode::Success);
+            return (false, CreateEditGoalCode::Success);
         }
     }
 
@@ -318,10 +325,10 @@ impl InMemoryRepo {
 }
 
 impl IRepo for InMemoryRepo {
-    fn create_edit_timebased_goal(&mut self, goal_dat: TimebasedGoal) -> CreateGoalCode {
+    fn create_edit_timebased_goal(&mut self, goal_dat: TimebasedGoal) -> CreateEditGoalCode {
         let (is_edit, code) = self.__create_edit_helper(&goal_dat.goal);
 
-        if code == CreateGoalCode::Success {
+        if code == CreateEditGoalCode::Success {
             if is_edit {
                 // Perform edit
                 for i in 0..self.timebased_goals.len() {
@@ -351,10 +358,10 @@ impl IRepo for InMemoryRepo {
         }
     }
 
-    fn create_edit_taskbased_goal(&mut self, goal_dat: TaskbasedGoal) -> CreateGoalCode {
+    fn create_edit_taskbased_goal(&mut self, goal_dat: TaskbasedGoal) -> CreateEditGoalCode {
         let (is_edit, code) = self.__create_edit_helper(&goal_dat.goal);
 
-        if code == CreateGoalCode::Success {
+        if code == CreateEditGoalCode::Success {
             if is_edit {
                 // Perform edit
                 for i in 0..self.timebased_goals.len() {
@@ -385,28 +392,75 @@ impl IRepo for InMemoryRepo {
         }
     }
 
-    fn create_edit_timebased_recurrence(&mut self, recurrence_dat: TimebasedRecurrence) -> bool {
-        self.timebased_recurrences.push(recurrence_dat);
-        return true;
+    fn create_edit_timebased_recurrence(&mut self, recurrence_dat: TimebasedRecurrence) -> CreateEditRecurrenceCode {
+        // Create mode
+        if (recurrence_dat.recurrence.recurrence_id == 0) {
+            self.timebased_recurrences.push(recurrence_dat);
+            let last_idx = self.timebased_recurrences.len() - 1;
+            self.timebased_recurrences[last_idx].recurrence.recurrence_id = self.__get_next_free_id();
+        }
+
+        // Edit mode
+        else {
+            let (is_found_timebased, idx_time) = self.__get_index_of_recurrence(true, recurrence_dat.recurrence.recurrence_id);
+            let (is_found_taskbased, idx_task) = self.__get_index_of_recurrence(false, recurrence_dat.recurrence.recurrence_id);
+
+            if !is_found_taskbased && !is_found_timebased { return CreateEditRecurrenceCode::Success; }
+            if is_found_taskbased { self.taskbased_recurrences.remove(idx_task); }
+            if is_found_timebased { self.timebased_recurrences.remove(idx_time); }
+
+            self.timebased_recurrences.push(recurrence_dat);
+        }
+
+        return CreateEditRecurrenceCode::Success;
     }
 
-    fn create_edit_taskbased_recurrence(&mut self, recurrence_dat: TaskbasedRecurrence) -> bool {
-        self.taskbased_recurrences.push(recurrence_dat);
-        return true;
+    fn create_edit_taskbased_recurrence(&mut self, recurrence_dat: TaskbasedRecurrence) -> CreateEditRecurrenceCode {
+        // Create mode
+        if (recurrence_dat.recurrence.recurrence_id == 0) {
+            self.taskbased_recurrences.push(recurrence_dat);
+            let last_idx = self.taskbased_recurrences.len() - 1;
+            self.taskbased_recurrences[last_idx].recurrence.recurrence_id = self.__get_next_free_id();
+        }
+
+        // Edit mode
+        else {
+            let (is_found_timebased, idx_time) = self.__get_index_of_recurrence(true, recurrence_dat.recurrence.recurrence_id);
+            let (is_found_taskbased, idx_task) = self.__get_index_of_recurrence(false, recurrence_dat.recurrence.recurrence_id);
+
+            if !is_found_taskbased && !is_found_timebased { return CreateEditRecurrenceCode::Success; }
+            if is_found_taskbased { self.taskbased_recurrences.remove(idx_task); }
+            if is_found_timebased { self.timebased_recurrences.remove(idx_time); }
+
+            self.taskbased_recurrences.push(recurrence_dat);
+        }
+
+        return CreateEditRecurrenceCode::Success;
     }
 
     fn delete_goal(&mut self, goal_id: u128) -> GoalDeleteCode {
         // Check that goal exists
         if !self.does_goal_exist(goal_id) { return GoalDeleteCode::FailureGoalDoesntExist; }
         // Check that goal has no incomplete subgoals
-        if self.get_num_immediate_subgoals(&[GoalCompletionStatus::Incomplete]) != 0 { return GoalDeleteCode::FailureGoalHasSubgoals; }
+        if self.get_num_immediate_subgoals(goal_id, &[GoalCompletionStatus::Incomplete]) != 0 { return GoalDeleteCode::FailureGoalHasSubgoals; }
 
         self.__set_goal_status(goal_id, GoalCompletionStatus::Deleted);
         return GoalDeleteCode::Success;
     }
 
     fn delete_recurrence(&mut self, recurrence_id: u128) -> bool {
-        todo!()
+        let (is_found_timebased, idx_time) = self.__get_index_of_recurrence(true, recurrence_id);
+        let (is_found_taskbased, idx_task) = self.__get_index_of_recurrence(false, recurrence_id);
+
+        if !is_found_timebased && !is_found_taskbased { return false; }
+
+        if is_found_timebased {
+            self.timebased_recurrences.remove(idx_time);
+        } else {
+            self.taskbased_recurrences.remove(idx_task);
+        }
+
+        return true;
     }
 
     fn feed_timebased_goal(&mut self, goal_id: u128, time_to_add_ms: u128) -> bool {
@@ -462,7 +516,7 @@ impl IRepo for InMemoryRepo {
         // Check that goal exists
         if !self.does_goal_exist(goal_id) { return GoalDeathCode::FailureGoalDoesntExist; }
         // Check that all subgoals have been resolved
-        if self.get_num_immediate_subgoals(&[GoalCompletionStatus::Incomplete]) > 0 { return GoalDeathCode::FailureSubgoalsNotAllDead }
+        if self.get_num_immediate_subgoals(goal_id, &[GoalCompletionStatus::Incomplete]) > 0 { return GoalDeathCode::FailureSubgoalsNotAllDead }
 
         self.__set_goal_status(goal_id, GoalCompletionStatus::Succeeded);
         return GoalDeathCode::Success;
@@ -472,7 +526,7 @@ impl IRepo for InMemoryRepo {
         // Check that goal exists
         if !self.does_goal_exist(goal_id) { return GoalDeathCode::FailureGoalDoesntExist; }
         // Check that all subgoals have been resolved
-        if self.get_num_immediate_subgoals(&[GoalCompletionStatus::Incomplete]) > 0 { return GoalDeathCode::FailureSubgoalsNotAllDead }
+        if self.get_num_immediate_subgoals(goal_id, &[GoalCompletionStatus::Incomplete]) > 0 { return GoalDeathCode::FailureSubgoalsNotAllDead }
 
         self.__set_goal_status(goal_id, GoalCompletionStatus::Failed);
         return GoalDeathCode::Success;
@@ -588,28 +642,69 @@ impl IRepo for InMemoryRepo {
     }
 
     fn is_timebased_recurrence(&self, rec_id: u128) -> bool {
-        todo!()
+        let (is_in_timebased, _) = self.__get_index_of_recurrence(true, rec_id);
+        return is_in_timebased;
     }
 
-    fn generate_goals_from_recurrence(&self, recurrence_id: u128, cur_time: u128) -> bool {
-        self.
+    fn generate_goals_from_recurrence(&self, rec_id: u128, cur_time: u128) -> bool {
+        // Fail if rec doesnt exist
+        if !self.does_recurrence_exist(rec_id) { return false; }
+
+        // Acquire recurrence data and index data
+        let (is_in_timebased, idx_time) = self.__get_index_of_recurrence(true, rec_id);
+        let (is_in_taskbased, idx_task) = self.__get_index_of_recurrence(true, rec_id);
+        let rec;
+        if is_in_taskbased { rec = self.taskbased_recurrences[idx_time].recurrence.clone(); }
+        else { rec = self.timebased_recurrences[idx_time].recurrence.clone(); }
+
+        // Get latest start time of all goals ever spawned by this recurrence
+        let mut latest_spawned_start_time = 0;
+        for gid in &rec.goals_ids_spawned_so_far {
+            let (res, goal_wrap) = self.get_goal_by_id(*gid.clone());
+            if res == GetGoalCode::Success && goal_wrap.is_some() {
+                let goal = goal_wrap.unwrap();
+                if goal.end_unix_timestamp > latest_spawned_start_time {
+                    latest_spawned_start_time = goal.end_unix_timestamp;
+                }
+            }
+        }
+
+        let mut next_spawn_start_time = max(latest_spawned_start_time, rec.start_unix_timestamp);
+
+        loop {
+            // TODO: Continue here
+
+            if next_spawn_start_time > cur_time { break; }  // Spawn one goal after cur_time
+            next_spawn_start_time += rec.spawn_interval_ms;
+            if next_spawn_start_time > rec.end_unix_timestamp { break; }  // Never spawn goals after rec end time
+        }
+        return true;
     }
 
     fn get_immediate_subgoals(&self, goal_id: u128, filter: &[GoalCompletionStatus]) -> Vec<Goal> {
-        todo!()
+        let mut goals = Vec::new();
+        for g in &self.timebased_goals {
+            if g.goal.parent_id == goal_id && filter.contains(&g.goal.completion_status) { goals.push(g.goal.clone()); }
+        }
+        for g in &self.taskbased_goals {
+            if g.goal.parent_id == goal_id && filter.contains(&g.goal.completion_status) { goals.push(g.goal.clone()); }
+        }
+        return goals;
     }
 
     fn does_goal_exist(&self, goal_id: u128) -> bool {
         let (is_in_timebased, _) = self.__get_index_of_goal(true, goal_id);
-        let (is_in_taskbased, _) = self.__get_index_of_goal(true, goal_id);
+        let (is_in_taskbased, _) = self.__get_index_of_goal(false, goal_id);
         return is_in_taskbased || is_in_timebased;
     }
 
     fn does_recurrence_exist(&self, rec_id: u128) -> bool {
-        todo!()
+        let (is_in_timebased, _) = self.__get_index_of_recurrence(true, rec_id);
+        let (is_in_taskbased, _) = self.__get_index_of_recurrence(true, rec_id);
+        return is_in_taskbased || is_in_timebased;
     }
 
-    fn get_num_immediate_subgoals(&self, filter: &[GoalCompletionStatus]) -> usize {
-        todo!()
+    fn get_num_immediate_subgoals(&self, goal_id: u128, filter: &[GoalCompletionStatus]) -> usize {
+        return self.get_immediate_subgoals(goal_id, filter).len();
     }
 }
