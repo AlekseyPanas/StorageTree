@@ -1,6 +1,4 @@
 use std::cmp::max;
-use std::process::id;
-use crate::repository;
 
 #[derive(PartialEq, Eq)]
 pub enum CreateEditGoalCode {
@@ -59,6 +57,7 @@ pub enum GoalCompletionStatus {
 #[derive(Clone, Debug)]
 pub struct Goal {
     pub parent_id: u128,  // 0 for no parent
+    pub recurrence_id: u128,  // Refers to recurrence which spawned this goal; 0 if none
     pub goal_id: u128,  // 0 if not yet defined (i.e goal being created)
     pub goal_name: String,
     pub start_unix_timestamp: u128,  // 0 if undefined (e.g for recurrences)
@@ -109,7 +108,7 @@ pub struct Recurrence {
     pub end_unix_timestamp: u128,  // 0 if indefinite
     pub spawn_interval_ms: u128,
     pub goal_duration_ms: u128,
-    pub goals_ids_spawned_so_far: Vec<u128>
+    pub latest_spawned_start_time_ms: u128  // The start time of the latest goal spawned by this recurrence (tracks next goal to spawn)
 }
 
 ///
@@ -374,6 +373,7 @@ impl IRepo for InMemoryRepo {
                 self.timebased_goals.push(goal_dat);
                 let last_idx = self.timebased_goals.len() - 1;
                 self.timebased_goals[last_idx].goal.goal_id = self.__get_next_free_id();
+                self.timebased_goals[last_idx].goal.recurrence_id = 0;
                 self.timebased_goals[last_idx].goal.completion_status = GoalCompletionStatus::Incomplete;
                 return code;
             }
@@ -406,6 +406,7 @@ impl IRepo for InMemoryRepo {
                 self.taskbased_goals.push(goal_dat);
                 let last_idx = self.taskbased_goals.len() - 1;
                 self.taskbased_goals[last_idx].goal.goal_id = self.__get_next_free_id();
+                self.timebased_goals[last_idx].goal.recurrence_id = 0;
                 self.taskbased_goals[last_idx].goal.completion_status = GoalCompletionStatus::Incomplete;
                 return code;
             }
@@ -422,6 +423,7 @@ impl IRepo for InMemoryRepo {
             self.timebased_recurrences.push(recurrence_dat);
             let last_idx = self.timebased_recurrences.len() - 1;
             self.timebased_recurrences[last_idx].recurrence.recurrence_id = self.__get_next_free_id();
+            self.timebased_recurrences[last_idx].recurrence.latest_spawned_start_time_ms = self.timebased_recurrences[last_idx].recurrence.start_unix_timestamp;
         }
 
         // Edit mode
@@ -429,11 +431,20 @@ impl IRepo for InMemoryRepo {
             let (is_found_timebased, idx_time) = self.__get_index_of_recurrence(true, recurrence_dat.recurrence.recurrence_id);
             let (is_found_taskbased, idx_task) = self.__get_index_of_recurrence(false, recurrence_dat.recurrence.recurrence_id);
 
+            let recorded_last_start_time;
             if !is_found_taskbased && !is_found_timebased { return CreateEditRecurrenceCode::FailureEditingRecurrenceDoesntExist; }
-            if is_found_taskbased { self.taskbased_recurrences.remove(idx_task); }
-            if is_found_timebased { self.timebased_recurrences.remove(idx_time); }
+            if is_found_taskbased {
+                recorded_last_start_time = self.taskbased_recurrences[idx_time].recurrence.latest_spawned_start_time_ms;
+                self.taskbased_recurrences.remove(idx_task);
+            }
+            else {
+                recorded_last_start_time = self.timebased_recurrences[idx_time].recurrence.latest_spawned_start_time_ms;
+                self.timebased_recurrences.remove(idx_time);
+            }
 
             self.timebased_recurrences.push(recurrence_dat);
+            let last_idx = self.timebased_recurrences.len() - 1;
+            self.timebased_recurrences[last_idx].recurrence.latest_spawned_start_time_ms = recorded_last_start_time;
 
             self.version_number += 1;
         }
@@ -447,6 +458,7 @@ impl IRepo for InMemoryRepo {
             self.taskbased_recurrences.push(recurrence_dat);
             let last_idx = self.taskbased_recurrences.len() - 1;
             self.taskbased_recurrences[last_idx].recurrence.recurrence_id = self.__get_next_free_id();
+            self.taskbased_recurrences[last_idx].recurrence.latest_spawned_start_time_ms = self.taskbased_recurrences[last_idx].recurrence.start_unix_timestamp;
         }
 
         // Edit mode
@@ -454,11 +466,20 @@ impl IRepo for InMemoryRepo {
             let (is_found_timebased, idx_time) = self.__get_index_of_recurrence(true, recurrence_dat.recurrence.recurrence_id);
             let (is_found_taskbased, idx_task) = self.__get_index_of_recurrence(false, recurrence_dat.recurrence.recurrence_id);
 
+            let recorded_last_start_time;
             if !is_found_taskbased && !is_found_timebased { return CreateEditRecurrenceCode::FailureEditingRecurrenceDoesntExist; }
-            if is_found_taskbased { self.taskbased_recurrences.remove(idx_task); }
-            if is_found_timebased { self.timebased_recurrences.remove(idx_time); }
+            if is_found_taskbased {
+                recorded_last_start_time = self.taskbased_recurrences[idx_time].recurrence.latest_spawned_start_time_ms;
+                self.taskbased_recurrences.remove(idx_task);
+            }
+            else {
+                recorded_last_start_time = self.timebased_recurrences[idx_time].recurrence.latest_spawned_start_time_ms;
+                self.timebased_recurrences.remove(idx_time);
+            }
 
             self.taskbased_recurrences.push(recurrence_dat);
+            let last_idx = self.taskbased_recurrences.len() - 1;
+            self.taskbased_recurrences[last_idx].recurrence.latest_spawned_start_time_ms = recorded_last_start_time;
 
             self.version_number += 1;
         }
@@ -699,19 +720,7 @@ impl IRepo for InMemoryRepo {
         if is_in_taskbased { rec = self.taskbased_recurrences[idx_time].recurrence.clone(); }
         else { rec = self.timebased_recurrences[idx_time].recurrence.clone(); }
 
-        // Get latest start time of all goals ever spawned by this recurrence
-        let mut latest_spawned_start_time = 0;
-        for gid in &rec.goals_ids_spawned_so_far {
-            let (res, goal_wrap) = self.get_goal_by_id(gid.clone());
-            if res == GetGoalCode::Success && goal_wrap.is_some() {
-                let goal = goal_wrap.unwrap();
-                if goal.end_unix_timestamp > latest_spawned_start_time {
-                    latest_spawned_start_time = goal.end_unix_timestamp;
-                }
-            }
-        }
-
-        let mut next_spawn_start_time = max(latest_spawned_start_time, rec.start_unix_timestamp);
+        let mut next_spawn_start_time = max(rec.latest_spawned_start_time_ms, rec.start_unix_timestamp);
 
         loop {
             if next_spawn_start_time > rec.end_unix_timestamp { break; }  // Never spawn goals after rec end time
@@ -724,14 +733,16 @@ impl IRepo for InMemoryRepo {
                 self.timebased_goals[last_idx].goal.start_unix_timestamp = next_spawn_start_time;
                 self.timebased_goals[last_idx].goal.end_unix_timestamp = next_spawn_start_time + self.timebased_recurrences[idx_time].recurrence.goal_duration_ms;
                 self.timebased_goals[last_idx].goal.goal_id = next_id;
-                self.timebased_recurrences[idx_time].recurrence.goals_ids_spawned_so_far.push(next_spawn_start_time);
+                self.timebased_goals[last_idx].goal.recurrence_id = rec_id;
+                self.timebased_recurrences[idx_time].recurrence.latest_spawned_start_time_ms = next_spawn_start_time;
             } else {
                 self.taskbased_goals.push(self.taskbased_recurrences[idx_task].taskbased_goal.clone());
                 let last_idx = self.taskbased_goals.len() - 1;
                 self.taskbased_goals[last_idx].goal.start_unix_timestamp = next_spawn_start_time;
                 self.taskbased_goals[last_idx].goal.end_unix_timestamp = next_spawn_start_time + self.taskbased_recurrences[idx_time].recurrence.goal_duration_ms;
                 self.taskbased_goals[last_idx].goal.goal_id = next_id;
-                self.taskbased_recurrences[idx_task].recurrence.goals_ids_spawned_so_far.push(next_spawn_start_time);
+                self.taskbased_goals[last_idx].goal.recurrence_id = rec_id;
+                self.taskbased_recurrences[idx_task].recurrence.latest_spawned_start_time_ms = next_spawn_start_time;
             }
 
             if next_spawn_start_time > cur_time { break; }  // Spawn one goal after cur_time

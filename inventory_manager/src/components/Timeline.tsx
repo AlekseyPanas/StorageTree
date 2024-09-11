@@ -1,5 +1,6 @@
 import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
+import { do_bounds_intersect } from "../util";
 import {createRef, useEffect, useRef, useState} from "react";
 
 enum CompletionStatus {
@@ -25,6 +26,7 @@ interface TaskbasedCriteriaItem {
 
 interface GoalDat {
     parentId: number,
+    sourceRecurrence: number,  // -1 if None
     goalId: number,
     startUnixTimestamp: number,
     endUnixTimestamp: number
@@ -34,34 +36,18 @@ interface GoalDat {
     success: string[],
     failure: string[],
     final: string[],
-    completionStatus: CompletionStatus
+    completionStatus: CompletionStatus,
+    isRecurrenceGhost: boolean
 }
 
 interface RecurrenceDat {
     recurrenceId: number,
-    title: string,
-    criteria: object,
-    success: string[],
-    failure: string[],
-    startTime: Date,
-    goalLengthSeconds: number,
-    goalSpawnInterval: number,
-    isDraft: boolean
-}
-
-interface ParsedCriteria {
-    type: string,  // One of "taskbased", "timebased"
-    desc: string
-}
-
-interface ParsedGoal {
-    title: string,
-    criteria: ParsedCriteria,
-    success: string[],
-    failure: string[],
-    startTime: Date,
-    deadline: Date,
-    isRecurrenceGhost: boolean
+    startUnixTimestamp: number,
+    endUnixTimestamp: number,
+    spawnIntervalMs: number,
+    GoalDurationMs: number,
+    latestSpawnedTimeMs: number,
+    goal: GoalDat
 }
 
 /**
@@ -103,6 +89,59 @@ function fetchRecurrenceData(): RecurrenceDat[] {
         isDraft: false
     }];
 }
+
+/**
+ * Given the start date epoch of the latest goal generated from the recurrence rec,
+ * return a list of parsed ghost goals ready for timeline use ending before the given date.
+ * if latestGeneratedEpoch = 0, then assume recurrence has not yet spawned any goals
+ */
+function generateGhostRecurrenceGoals(latestGeneratedEpoch: number, before: Date, rec: RecurrenceDat): GoalDat[] {
+    let ghostGoals = [];
+    let start = latestGeneratedEpoch === 0 ? rec.startTime.getTime() : latestGeneratedEpoch + (rec.goalSpawnInterval * 1000);
+    for (let i = start; i <= before.getTime(); i += rec.goalSpawnInterval * 1000) {
+        ghostGoals.push({
+            title: rec.title,
+            criteria: getParsedCriteria(rec.criteria),
+            success: rec.success,
+            failure: rec.failure,
+            startTime: new Date(i),
+            deadline: new Date(i + (rec.goalLengthSeconds * 1000)),
+            isRecurrenceGhost: true
+        });
+    }
+    return ghostGoals;
+}
+
+/**
+ * Generate ghost recurrence goals and arrange all goals (including ghosts) into timeline rows such that
+ * children are immediately below parents and recurrences share a row
+ */
+function generate_timeline(goals: GoalDat[], recurrences: RecurrenceDat[],
+                           start_unix_ms: number, end_unix_ms: number): GoalDat[][] {
+    /*
+    * arrangement:
+	- Get all relevant goals and ghost recurrence goals
+	- Track goals that have been "placed"
+	- loop goals
+	- Add goal to next available row + all goals that share the same recurrence
+	- loop goal's children
+	- Add goals to next available row + all goals that share the same recurrence
+	- Repeat until no more children
+	- Continue looping goals until all goals "placed"
+    * */
+
+    // Collect goals which intersect bounds
+    let finalGoals = goals.filter((goal) => do_bounds_intersect(goal.startUnixTimestamp, goal.endUnixTimestamp,
+        start_unix_ms, end_unix_ms));
+
+    // Create and append recurrence ghosts from all recurrences
+    
+
+    let indexes = Array.from({ length: goals.length }, (_, index) => index);
+    let rows: GoalDat[][] = new Array<GoalDat[]>();
+
+}
+
 
 function Timeline() {
     const [goalData, setGoalData] = useState<GoalDat[]>(fetchGoalData());
@@ -160,28 +199,6 @@ function Timeline() {
     function getRightEdgeDate() {
         let totalMs = timelineStruct.secondsPerPixel * containerWidth * 1000;
         return new Date(timelineStruct.leftEdgeDate.getTime() + totalMs);
-    }
-
-    /**
-     * Given the start date epoch of the latest goal generated from the recurrence rec,
-     * return a list of parsed ghost goals ready for timeline use ending before the given date.
-     * if latestGeneratedEpoch = 0, then assume recurrence has not yet spawned any goals
-     */
-    function generateGhostRecurrenceGoals(latestGeneratedEpoch: number, before: Date, rec: RecurrenceDat): ParsedGoal[] {
-        let ghostGoals = [];
-        let start = latestGeneratedEpoch === 0 ? rec.startTime.getTime() : latestGeneratedEpoch + (rec.goalSpawnInterval * 1000);
-        for (let i = start; i <= before.getTime(); i += rec.goalSpawnInterval * 1000) {
-            ghostGoals.push({
-                title: rec.title,
-                criteria: getParsedCriteria(rec.criteria),
-                success: rec.success,
-                failure: rec.failure,
-                startTime: new Date(i),
-                deadline: new Date(i + (rec.goalLengthSeconds * 1000)),
-                isRecurrenceGhost: true
-            });
-        }
-        return ghostGoals;
     }
 
     /**
