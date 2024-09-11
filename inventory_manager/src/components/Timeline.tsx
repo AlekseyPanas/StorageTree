@@ -91,30 +91,47 @@ function fetchRecurrenceData(): RecurrenceDat[] {
 }
 
 /**
- * Given the start date epoch of the latest goal generated from the recurrence rec,
- * return a list of parsed ghost goals ready for timeline use ending before the given date.
- * if latestGeneratedEpoch = 0, then assume recurrence has not yet spawned any goals
+ * Given a recurrence and a set of timeline view bounds, create ghost goals that would exist within
+ * these bounds spawned by this recurrence in the future
  */
-function generateGhostRecurrenceGoals(latestGeneratedEpoch: number, before: Date, rec: RecurrenceDat): GoalDat[] {
-    let ghostGoals = [];
-    let start = latestGeneratedEpoch === 0 ? rec.startTime.getTime() : latestGeneratedEpoch + (rec.goalSpawnInterval * 1000);
-    for (let i = start; i <= before.getTime(); i += rec.goalSpawnInterval * 1000) {
+function generateGhostRecurrenceGoals(rec: RecurrenceDat, leftBoundMs: number, rightBoundMs: number): GoalDat[] {
+    let ghostGoals: GoalDat[] = [];
+
+    let start = Math.max(rec.startUnixTimestamp, rec.latestSpawnedTimeMs);
+    if (leftBoundMs > start) {
+        // Finds closest start time to the left of the left bound, to avoid spawning ghosts outside timeline window
+        let newStart = leftBoundMs - ((leftBoundMs - start) % rec.spawnIntervalMs);
+        if (newStart > start) { start = newStart; }
+    }
+
+    // Spawn goals
+    for (let i = start;
+         i < Math.min(rec.endUnixTimestamp, rightBoundMs);
+         i += rec.spawnIntervalMs) {
         ghostGoals.push({
-            title: rec.title,
-            criteria: getParsedCriteria(rec.criteria),
-            success: rec.success,
-            failure: rec.failure,
-            startTime: new Date(i),
-            deadline: new Date(i + (rec.goalLengthSeconds * 1000)),
-            isRecurrenceGhost: true
+            completionStatus: CompletionStatus.INCOMPLETE,
+            criteria: rec.goal.criteria,
+            startUnixTimestamp: rec.goal.startUnixTimestamp,
+            endUnixTimestamp: rec.goal.endUnixTimestamp,
+            success: rec.goal.success,
+            failure: rec.goal.failure,
+            final: rec.goal.final,
+            goalId: -1,
+            goalName: rec.goal.goalName,
+            isRecurrenceGhost: true,
+            isTimebased: rec.goal.isTimebased,
+            parentId: rec.goal.parentId,
+            sourceRecurrence: rec.recurrenceId
         });
     }
+
     return ghostGoals;
 }
 
 /**
  * Generate ghost recurrence goals and arrange all goals (including ghosts) into timeline rows such that
- * children are immediately below parents and recurrences share a row
+ * children are immediately below parents and recurrences share a row. Filter out goals which are outside of the
+ * timeline for performance
  */
 function generate_timeline(goals: GoalDat[], recurrences: RecurrenceDat[],
                            start_unix_ms: number, end_unix_ms: number): GoalDat[][] {
@@ -135,7 +152,9 @@ function generate_timeline(goals: GoalDat[], recurrences: RecurrenceDat[],
         start_unix_ms, end_unix_ms));
 
     // Create and append recurrence ghosts from all recurrences
-    
+    for (let rec of recurrences) {
+        finalGoals.concat(generateGhostRecurrenceGoals(rec, start_unix_ms, end_unix_ms));
+    }
 
     let indexes = Array.from({ length: goals.length }, (_, index) => index);
     let rows: GoalDat[][] = new Array<GoalDat[]>();
