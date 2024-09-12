@@ -2,6 +2,7 @@ import "../styles/Timeline.css"
 import GoalBlock from "./GoalBlock";
 import { do_bounds_intersect } from "../util";
 import {createRef, useEffect, useRef, useState} from "react";
+import {invoke} from "@tauri-apps/api/tauri";
 
 enum CompletionStatus {
     INCOMPLETE,
@@ -29,7 +30,7 @@ interface GoalDat {
     sourceRecurrence: number,  // -1 if None
     goalId: number,
     startUnixTimestamp: number,
-    endUnixTimestamp: number
+    endUnixTimestamp: number,
     goalName: string,
     criteria: TimebasedCriteria | TaskbasedCriteriaItem[],
     isTimebased: boolean,
@@ -50,44 +51,84 @@ interface RecurrenceDat {
     goal: GoalDat
 }
 
+function convert_completion_status(backend_string: string): CompletionStatus {
+    switch(backend_string) {
+        case "Incomplete": { return CompletionStatus.INCOMPLETE; }
+        case "Succeeded": { return CompletionStatus.SUCCEEDED; }
+        case "Failed": { return CompletionStatus.FAILED; }
+        case "Deleted": { return CompletionStatus.DELETED; }
+        default: { return CompletionStatus.INCOMPLETE; }
+    }
+}
+
 /**
  * Return a list of goal objects fetched from backend repository
  */
-function fetchGoalData(): GoalDat[] {
-    return [{
-        goalId: 0,
-        title: "TestGoal",
-        criteria: {
-            type: "taskbased",  // event, taskbased, timebased
-            dat: { desc: "Do this goal" }  // {desc: str}, {desc: str}, {task: str, timehours: int}
-        },
-        success: ["+3B", "Candy"],
-        failure: ["-3B / hr, +2B / hr"],
-        startTime: new Date(2024, 7, 15, 5, 30, 3),
-        deadline: new Date(2024, 7, 18, 5, 30, 3),
-        isDraft: false,
-        sourceRecurrenceId: -1
-    }];
+async function fetchGoalData(): Promise<GoalDat[]> {
+    return new Promise((resolve, reject) => {
+        Promise.all([
+            invoke("get_all_timebased_goals"),
+            invoke("get_all_taskbased_goals")
+        ]).then((results) => {
+            let allGoals: GoalDat[] = [];
+            allGoals = allGoals.concat(results[0].map((item) => {
+                return {
+                    parentId: item.goal.parent_id,
+                    sourceRecurrence: item.goal.recurrence_id,  // -1 if None
+                    goalId: item.goal.goal_id,
+                    startUnixTimestamp: item.goal.start_unix_timestamp,
+                    endUnixTimestamp: item.goal.end_unix_timestamp,
+                    goalName: item.goal.goal_name,
+                    criteria: {
+                        timeMs: item.criteria.time_ms,
+                        linkId: item.criteria.link_id,
+                        task: item.criteria.task,
+                        feed: item.criteria.feed,
+                        dedicatedTimeMs: item.criteria.dedicated_time_ms
+                    },
+                    isTimebased: true,
+                    success: item.goal.success_callback,
+                    failure: item.goal.failure_callback,
+                    final: item.goal.finally_callback,
+                    completionStatus: convert_completion_status(item.goal.completion_status),
+                    isRecurrenceGhost: false
+                };
+            }));
+            allGoals = allGoals.concat(results[1].map((item) => {
+                return {
+                    parentId: item.goal.parent_id,
+                    sourceRecurrence: item.goal.recurrence_id,  // -1 if None
+                    goalId: item.goal.goal_id,
+                    startUnixTimestamp: item.goal.start_unix_timestamp,
+                    endUnixTimestamp: item.goal.end_unix_timestamp,
+                    goalName: item.goal.goal_name,
+                    criteria: item.criteria.map((crit) => {
+                        return {
+                            description: crit.description,
+                            linkId: crit.link_id,
+                            isChecked: crit.is_checked
+                        }
+                    }),
+                    isTimebased: false,
+                    success: item.goal.success_callback,
+                    failure: item.goal.failure_callback,
+                    final: item.goal.finally_callback,
+                    completionStatus: convert_completion_status(item.goal.completion_status),
+                    isRecurrenceGhost: false
+                };
+            }));
+            resolve(allGoals);
+        });
+    })
 }
 
 /**
  * Return a list of recurrence objects fetched from backend repository
  */
-function fetchRecurrenceData(): RecurrenceDat[] {
-    return [{
-        recurrenceId: 0,
-        title: "TestRecurrenceGoal",
-        criteria: {
-            type: "taskbased",
-            dat: { desc: "Do this recurring thing!" }
-        },
-        success: ["+5B", "Cake"],
-        failure: ["-6B / hr, +1B / hr"],
-        startTime: new Date(2024, 7, 12, 5, 30, 3),
-        goalLengthSeconds: 108000 / 2,  // seconds
-        goalSpawnInterval: 201600 / 2,  // seconds
-        isDraft: false
-    }];
+async function fetchRecurrenceData(): Promise<RecurrenceDat[]> {
+    return new Promise((resolve, reject) => {
+        
+    });
 }
 
 /**
@@ -135,18 +176,6 @@ function generateGhostRecurrenceGoals(rec: RecurrenceDat, leftBoundMs: number, r
  */
 function generate_timeline(goals: GoalDat[], recurrences: RecurrenceDat[],
                            start_unix_ms: number, end_unix_ms: number): GoalDat[][] {
-    /*
-    * arrangement:
-	- Get all relevant goals and ghost recurrence goals
-	- Track goals that have been "placed"
-	- loop goals
-	- Add goal to next available row + all goals that share the same recurrence
-	- loop goal's children
-	- Add goals to next available row + all goals that share the same recurrence
-	- Repeat until no more children
-	- Continue looping goals until all goals "placed"
-    * */
-
     // Collect goals which intersect bounds
     let finalGoals = goals.filter((goal) => do_bounds_intersect(goal.startUnixTimestamp, goal.endUnixTimestamp,
         start_unix_ms, end_unix_ms));
@@ -156,13 +185,44 @@ function generate_timeline(goals: GoalDat[], recurrences: RecurrenceDat[],
         finalGoals.concat(generateGhostRecurrenceGoals(rec, start_unix_ms, end_unix_ms));
     }
 
-    let indexes = Array.from({ length: goals.length }, (_, index) => index);
+    let indexes: number[] = Array.from({ length: finalGoals.length }, (_, index) => index);
     let rows: GoalDat[][] = new Array<GoalDat[]>();
 
+    while (true) {
+        // Pop next goal and add it to next available row
+        let i: number = indexes.pop();
+        rows.push([finalGoals[i]])
+
+        // All goals that share a recurrence source with the above goal share the same row
+        indexes = indexes.filter((idx) => {
+            if (finalGoals[i].sourceRecurrence === finalGoals[idx].sourceRecurrence) {
+                rows[-1].push(finalGoals[idx]);
+                return false;
+            } return true;
+        });
+
+        // All immediate children of the goal that was just added are pushed to the front of the array (so they appear immediately next)
+        let childrenIdxs: number[] = [];
+        indexes.filter((idx) => {
+            if (finalGoals[idx].parentId == finalGoals[i].goalId) {
+                childrenIdxs.push(idx);
+                return false;
+            } return true;
+        });
+        for (let childIdx of childrenIdxs) {
+            indexes.unshift(childIdx);
+        }
+
+        // If all goals sorted into rows, finish
+        if (indexes.length == 0) { break; }
+    }
+
+    return rows;
 }
 
-
 function Timeline() {
+    fetchGoalData().then((goals) => { console.log(goals); });
+
     const [goalData, setGoalData] = useState<GoalDat[]>(fetchGoalData());
     const [recurrenceData, setRecurrenceData] = useState<RecurrenceDat[]>(fetchRecurrenceData());
     const [timelineStruct, setTimelineStruct] = useState({

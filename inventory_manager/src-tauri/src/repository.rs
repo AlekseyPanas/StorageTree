@@ -1,6 +1,7 @@
 use std::cmp::max;
+use serde::Serialize;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum CreateEditGoalCode {
     Success,
     FailureSubgoalOutsideParentTimebound,
@@ -9,34 +10,34 @@ pub enum CreateEditGoalCode {
     FailureEditingGoalDoesntExist
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum CreateEditRecurrenceCode {
     Success,
     FailureEditingRecurrenceDoesntExist
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum GoalDeathCode {
     Success,
     FailureSubgoalsNotAllDead,
     FailureGoalDoesntExist
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum GetGoalCode {
     Success,
     FailureGoalIncorrectType,
     FailureGoalDoesntExist
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum GoalDeleteCode {
     Success,
     FailureGoalHasSubgoals,
     FailureGoalDoesntExist
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize)]
 pub enum CheckUncheckTaskbasedCriteriaCode {
     SuccessCriteriaToggled,
     SuccessCriteriaAlreadyInThisState,
@@ -45,7 +46,7 @@ pub enum CheckUncheckTaskbasedCriteriaCode {
     FailureGoalIsTimebased
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Serialize)]
 pub enum GoalCompletionStatus {
     Incomplete,
     Succeeded,
@@ -54,7 +55,7 @@ pub enum GoalCompletionStatus {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Goal {
     pub parent_id: u128,  // 0 for no parent
     pub recurrence_id: u128,  // Refers to recurrence which spawned this goal; 0 if none
@@ -69,7 +70,7 @@ pub struct Goal {
 }
 
 ///
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct TimebasedCriteria {
     pub time_ms: u128,
     pub link_id: u128,  // 0 if custom task is present
@@ -79,14 +80,14 @@ pub struct TimebasedCriteria {
 }
 
 ///
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct TimebasedGoal {
     pub goal: Goal,
     pub criteria: TimebasedCriteria
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TaskbasedCriteriaItem {
     pub description: String,
     pub link_id: u128, // 0 if unlinked
@@ -94,14 +95,14 @@ pub struct TaskbasedCriteriaItem {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TaskbasedGoal {
     pub goal: Goal,
     pub criteria: Vec<TaskbasedCriteriaItem>
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Recurrence {
     pub recurrence_id: u128,
     pub start_unix_timestamp: u128,
@@ -112,14 +113,14 @@ pub struct Recurrence {
 }
 
 ///
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct TimebasedRecurrence {
     pub timebased_goal: TimebasedGoal,
     pub recurrence: Recurrence
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TaskbasedRecurrence {
     pub taskbased_goal: TaskbasedGoal,
     pub recurrence: Recurrence
@@ -131,7 +132,9 @@ pub trait IRepo {
     /// the version number to a new unique value
     fn get_state_version(&self) -> u128;
 
-    ///
+    /// recurrence_id: value irrelevant
+    /// goal_id: 0 for new goal, non-zero to edit existing goal with this provided ID
+    /// completion_status: value irrelevant
     fn create_edit_timebased_goal(&mut self, goal_dat: TimebasedGoal) -> CreateEditGoalCode;
 
     ///
