@@ -1,0 +1,324 @@
+Notes:
+
+Horizontal timetable
+
+- A goal has a starting date and a deadline date.
+- A goal has the following optional callbacks:
+
+    success {
+        What to do if criterion was fulfilled within time bound
+    } failure {
+        What to do if criterion wasn't fulfilled within time bound
+    } finally (death) {
+        What to do when the time bound is over, regardless of success or failure
+    }
+
+- A goal can be time-based or task-based.
+    - Time-based: Criterion is based on time, such as working on something for X amount of time
+    - Task-based: Criterion is based on completing a task
+- Dates in a goal can either be set by you or be set by another party outside your control (e.g exam)
+
+- A goal comes with a "strategy", which is essentially a list of subgoals.
+
+    - Subgoals can only exist within the timebound of the parent goal. Therefore, subgoals will always expire before
+    the parent goal. Recurring subgoals recur up to the last possible recurrence without exceeding parent timebound
+
+    Examples:
+    - Get P3 (taskbased) { fulfill requirements (taskbased) { go fly {timebased} }, take exam (event), do SIV (event), get signed off (event) }
+    - Do assignment (taskbased) { work on assignment (timebased), submit assignment (taskbased) { work on submitting {timebased} } }
+    - Take a photo of Ascutney (taskbased) { work on taking a photo of ascutney (timebased) }
+
+- A goal is "tightly bounded" if its start and end date difference are exactly equal to the time criterion.
+A goal must be time-based for this to work, since a task-based goal may take longer or shorter than the given interval.
+
+- Example: An "Event", such as a lecture, is a time-based goal whose start and end dates are tightly bounded
+ to the time-based criterion and are not controlled by you. For this reason, "Event" will be a shorthand format
+ for this type of goal; a goal which is both tightly bounded AND the dates are not controlled by you
+
+- Goal resolution:
+    - If a goal's timebound expires, the goal gets added to a queue of unresolved goals
+        - The queue must be cleared each time the app is opened before other actions can be performed
+        - If a subgoal's expiration is tied with the parent's, the subgoal must be resolved first
+        - Resolving means checking success (as in the goal was completed) or failure (means the goal expired uncompleted)
+        - During resolution, the goal can be edited in case plans changed but the app wasn't opened earlier. After editing
+        is finished, the goal will either reappear in the queue or be removed (typically editing involves extending deadline)
+        - During resolution, the goal can also be deleted
+    - A goal can always be checked off as a success anytime
+        - Since subgoals are resolved first in timebound expiration, all subgoals will be dead prior to parent goal
+        UNLESS its a recurring subgoal OR the goal was checked off as an early success
+    - A success goal death prompts the execution of the success callback immediately. Same with failure goal death
+        - A failure which involves deadline extension will automatically revive any recurring subgoals if theyre indefinite
+        - A goal death will automatically kill all subgoals (e.g early success). Only the "finally" callback will execute
+        on those subgoals
+
+- Common failure callbacks:
+    - Extend deadline with optional penalty or increasing penalty per extension
+    - New goal to makeup the missed goal with optional penalty
+
+- Recurring goals:
+    - A recurrence is a function which spawns goals by some set of time-based rules. Therefore, a "recurrence" and a goal
+    resulting from a recurrence are separate things
+    - A recurring goal's time bound can overlap or have gaps
+    - A recurrence can be configured to:
+        - End at a certain date: it will recur until the next recurrence would exceed this date (thus there may be a gap)
+        - Recur a specific number of times after which it stops
+        - Omit/cancel a specific recurrence by date or count
+    - Goals as part of a recurrence technically spawn immediately upon the goal start date of the next recurrence. Once
+    the goal is spawned, it is now unaffected by recurrence edits
+
+- Goal display
+    - Goals will all be shown in the horizontal timeline stacked vertically
+    - Recurrences will show "ghost" goals which have yet to be spawned
+    - Subgoals will always take rows immediately below the parent
+    - Recurrences take up a whole row of their own. Otherwise, non-overlapping goals may use the same row
+    - A time-based goal whose timebound is greater than the criteria appears differently than those that are tightly bounded
+        - It is typical for a non-tightly-bounded time-based goal to have subgoals which are tightly bounded
+        - e.g Work on Paxos for 10 hours in the week, but then you schedule tight work goals throughout the week
+    - Events have an extra highlight to them
+
+- Goal Progress
+    - Nested timebased: It is often useful to break down long term time-based goals into smaller time-based goals. To put
+    in 500 hours of reading in a year, you might read for 2-3 hours a day. Such nesting can be directly configured to feed
+    into the criteria progress for the parent goal
+    - Record time: A time-based goal has a nice UI to record time you've committed to the goal so far
+    - Checklist: Criteria can have an embedded checklist which saves state of checked items
+    - Checklist goal link: A checklist item can link to subgoal and will automatically get checked off if that subgoal has succeeded (or show a red X if the goal has failed)
+    - Text: Criteria is sometimes just a line of text instructions
+
+
+- Draft goals: It is often useful to have a goal be partially created but not yet active. For example, you know you'll
+go on a hike in the next year, but you have no clue when. You dont want the goal to be evaluated for failure or success
+yet. Such goals are left as "drafts".
+    - If your draft has a date set on it (as a tentative date), then it will show up on the timeline with a
+    special "ghost" appearance.
+    - The app will prompt you to edit the goal if the tentative start date is approaching within a configured interval
+    - Active goals can be changed to draft goals
+    - Deadlineless goals are effectively "Draft" goals since you are not actively pursuing their completion yet
+
+- Window Goals: This special type of goal is a maintenance goal. Rather than having a criteria which must be completed,
+the criteria must be maintained. e.g Maintain 5 hours of bike riding per 7 days.
+    - Has a time window within which the criteria must be satisfied.
+    - For the above example, as long as you biked for at least 5 hours in the past 7 days, you're maintaining it.
+    - If you biked 5 hours in the past 7 days but 3 of those were done exactly 7 days ago, the next day over you will
+    only have biked 2 hours in the past 7 days since the window moved. You must now bike again to maintain the goal
+    - success/failure for such a goal must be configured to either be interval-based or continuous. For the duration
+    that the goal is maintained, the "success" will be evaluated. Otherwise failure
+        - e.g continuous: +3 coins / 1 hour. Then for any unit of time that the goal is maintained, you gain an exact
+        amount of coin
+        - e.g interval: 10 pushups / 1 day of no maintenance. If less than a day, then you dont get your punishment/reward.
+        It must be that the interval has passed exactly.goal
+    - The criteria for this goal must be numerically quantifiable. This is required and built into the app
+    - To log completion of this goal, you enter a quantity along with a log time
+        - e.g for the bike example, you might log 30 min at 4:15 PM, Monday.
+    - If you open the app maintenance goals will prompt you
+        - An unmaintained goal will first ask you to log anything you may have not logged in hindsight.
+        - Then if the success/failure is interval based, it will prompt you to execute the callback for how many ever
+        intervals have passed in maintained or unmaintained states based on what you logged
+            - If continuous, it will prompt you once for the whole duration
+
+
+- Dead goals are kept on record for a while until they are deleted (maybe month or more)
+
+- At any time for any reason, you have the power to modify goals, move them, etc
+
+- Automated callbacks: Some callback tasks on success or failure can be preset automations. You will still be prompted
+to execute this automation when resolving a goal, but you wont need to do manual labor. Automations include
+    - Extend deadline of this goal by X
+    - Increment or decrement a defined variable
+    - Update callback of _ to _
+    - TODO: Add more. e.g creating new goals, modifying values, etc. Automatic tasks will be choosable from a list with
+    a custom set of parameters for each, and add-able to a goal's blocks.
+
+- Evening Checkin Summary:
+    - [2] Complete quick-tasks, which often involve creating goals
+    - [3] Plan next day, and plan the week ahead
+
+- Morning Checkin Summary:
+    - [1] Check of yesterday's goal completion
+"""
+
+
+
+/*
+Frontend Plan:
+
+fn fetch_goal_data() -> Goal[]
+    - Fetch all goals from DB
+
+fn fetch_recurrences() -> Recurrence[]
+    - Fetch all recurrences from DB
+
+fn build_timeline_structure(Goal[], Recurrence[]) -> GoalBlock[]
+    - Converts goals and recurrences into the timetable structure
+    - More precisely, determines the row each goal and recurrence lives on
+    - Saves this data to timeline_structure
+
+react state: timeline_structure
+react state: edit_recurrence_dat
+react state: edit_goal_dat
+react state: success_list
+react state: failure_list
+react state: recurrence_context
+react state: goal_context
+
+App:
+    Timeline View:  // Interactive timeline component containing all goal blocks, and functionality
+        // Dragging or scrolling edits some state which controls timeline "camera" window
+        // On receive click from block, make it selected
+        // On receive appropriate drag event, modify timeline_structure accordingly and push goal change to DB
+        foreach in timeline_structure:
+            Block:
+                // A single goal block. Customizable to display blocks for everything that will appear on the timeline
+                // Clicking it calls parent function from Timeline view
+                // Dragging an edge or on body of block will trigger appropriate callbacks in parent
+    Edit Recurrence:
+        // Modal to edit or make a new recurrence. Invisible by default. Filled from edit_recurrence_dat
+        // Upon clicking save, calls a function passed from App. App knows what to do based on the context in which the modal was opened
+    Edit Goal:  // Same as Edit Recurrence but with edit_goal_dat
+    Success,Failure,Edit Modal
+    Skip these goals, edit recurrence, create goals Modal
+    Failure List Modal:  // Reads from failure_list
+    Success List Modal:  // Reads from success_list
+    Recurrence context menu:  // Reads position and is_enabled from recurrence_context
+    Goal context menu:  // same but with goal_context
+
+
+Calming Notion of Goal Resolution:
+    - Goals exist as some piece of data with some timebound and some completion status
+    - Notice how this is completely irrespective of what time it is now
+    - At any time you may resolve a goal, execute its callbacks, and this may add, move, or change things in the timeline
+    - Again, notice how the current time doesn't matter
+    - Now on the app level, resolving simply means searching for unresolved expired goals, executing their callbacks, changing
+    their state to resolved, checking again for expired goals, and repeating this until no expired goals remain
+
+    - Recurrences are functions that spawn new goals and track goals that have already been spawned to know which next ones to spawn
+    - Note how this is irrespective of current time
+    - You can tell a recurrence to spawn goals up to a certain time
+    - This is irrespective of current time and can be called anytime with any value
+*/
+
+
+
+
+
+
+
+
+
+Implementation Notes:
+
+Day Column(s) Component(s)
+Makeup Column Component
+Spanning Row(s) Component(s)
+
+The contribution graph forms a tree with potentially shared children
+
+For simplicity, recurrences are goal generators. If the recurrence is set for less than X goals, generate at once. Everything greater will generate on-demand
+
+ContributorType:
+    SUBGOAL,
+    STRATEGY,
+    SCHEDULING
+
+Goal:
+    id: ID
+    name: str
+    desc: str | None
+    timebased_criteria_seconds: int64 | None
+    timebased_progress_seconds: int64 | None
+    starttime_unix: int64
+    deadline_unix: in64
+    ect_seconds: int64 | None
+    contributes_to: Set<ID> | None
+    contributor_type: ContributorType | None
+    subgoal_set: Set<ID> | None
+    is_subgoal_set_completing: bool | None
+    strategy_set: Set<ID> | None
+    is_strategy_set_incomplete: bool | None
+    scheduling_set: Set<ID> | None
+
+Recurrence:
+    id: ID
+
+    title: str
+    desc: str | None
+    timebased_criteria_seconds: int64 | None
+    ect_seconds: int64 | None
+
+    rec_lower_bound_unix: int64
+    rec_upper_bound_unix: int64 | None
+
+    get_indexes_between(unix_a: int64, unix_b: int64) -> int64[]
+    get_starttime_for_index(idx: int64) -> int64
+    get_deadline_for_index(idx: int64) -> int64
+    only_ungenerated_indexes(idxs: int64[]) -> int64[]
+    is_generated(idx: int64) -> bool
+    link_goal(idx: int64, goal_id: ID) -> void
+    get_linked_goal(idx: int64) -> Goal | None
+    unlink_goal(idx: int64) -> void
+    set_generated(idx: int64, is_generated: bool) -> void
+
+    id: ID
+    name: str
+    desc: str | None
+    timebased_criteria_seconds: int64 | None
+    ect_seconds: int64 | None
+
+
+
+
+
+RecurrenceDeadlinePattern:
+    get_re
+
+RecurrenceStarttimePattern:
+    get
+
+
+For each goal:
+    If the goal is day-bound, add to day column
+        Set goal position, height, outlines, and other styling from ECT, deadline, and starttime
+    Elif the goal is spanning, add to spanning rows
+    Elif the goal is makeup, add to makeup list
+        If scheduling type goal, add on top with glow
+    Read contributor set type and contents to determine additional styling (subgoal completion dots, glow if in makeup, greyed out, etc)
+    Add arrows to subgoals if subgoals within view
+    Add recurrence icon if recurrence
+
+
+Recur(0)
+	- Title, Desc, Time Criteria, ECT: Read 120 hours
+	- Lower bound: 9/6/2025, 0:00
+	- Upper bound: infinity
+	- Recurrence Function: [NextAvailableDayAlign(Lower bound) + 1 Year], Loop([NextDay() + 1 Year])
+	- Contributes to: NULL
+	- Contributor type: NULL
+	- Subgoal Set: NULL
+	- Strategy Set: {
+		RecurTemplate{
+			- Title, Desc, Time Criteria, ECT: Read 10 hours
+			- Recurrence Function: [NextAvailableDayAlign(Lower bound) + 1 Month], Loop([NextDay() + 1 Month])
+			- Subgoal Set: NULL
+			- Strategy Set: {
+				RecurTemplate{
+					- Title, Desc, Time Criteria, ECT: Read 1 hour
+					- Recurrence Function: [EvenSplitDayAligned(Lower bound, Upper bound, count=10, genesis_starttime=false)]
+					- Subgoal Set: NULL
+					- Strategy Set: NULL
+				}
+			}
+		},
+		GoalTemplate{
+			- Title, Desc, Time Criteria, ECT: Log yearly stats in spreadsheet
+			- Starttime, Deadline: [EarliestPriorAvailableDayAlign(Parent Deadline) + 1 Day]
+			- Subgoal Set: NULL
+			- Strategy Set: NULL
+		}
+	}
+
+- Whenever a goal is generated via a recurrence, all GoalTemplates are generated as goals and all RecurTemplates are generates as root Recur instances
+
+Use Cases:
+    - Edit or Delete any recurrence-generated goal instance without affecting the entire recurrence
+    - Change a recurrence function to affect all instances after the latest completed or failed instance
+    - Delete recurrence and all goals part of the recurrence (full clear).
