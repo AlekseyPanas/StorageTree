@@ -220,59 +220,98 @@ ContributorType:
     STRATEGY,
     SCHEDULING
 
-Goal:
-    id: ID
+
+// Different functions of this type take a point in time and generate a relative actual time based on some potentially additional input
+RelativeTimeGenerator(unix: int64) -> int64
+
+
+// Gets the idx-th timestamp in a pattern starting from a given lower bound, or None if out of bounds by upper bound
+RecurrencePattern(lower_bound_unix: int64, upper_bound_unix: int64, idx: int) -> int64 | None
+
+
+StaticGoalDat:  // Goal data which doesn't change across recurrence instances
     name: str
     desc: str | None
     timebased_criteria_seconds: int64 | None
-    timebased_progress_seconds: int64 | None
-    starttime_unix: int64
-    deadline_unix: in64
     ect_seconds: int64 | None
     contributes_to: Set<ID> | None
     contributor_type: ContributorType | None
+
+
+Goal:  // Goal instances that are created
+    id: ID
+
+    static_dat: StaticGoalDat
+
+    timebased_progress_seconds: int64 | None
+
+    starttime_unix: int64
+    deadline_unix: in64
+
     subgoal_set: Set<ID> | None
     is_subgoal_set_completing: bool | None
     strategy_set: Set<ID> | None
-    is_strategy_set_incomplete: bool | None
     scheduling_set: Set<ID> | None
 
-Recurrence:
+
+Recurrence:  // Recurrence instances which are created and linked to 0 or more Goals
     id: ID
 
-    title: str
-    desc: str | None
-    timebased_criteria_seconds: int64 | None
-    ect_seconds: int64 | None
+    // Data relevant to this recurrence
+    template: RecurrenceTemplate
 
-    rec_lower_bound_unix: int64
-    rec_upper_bound_unix: int64 | None
-
-    get_indexes_between(unix_a: int64, unix_b: int64) -> int64[]
-    get_starttime_for_index(idx: int64) -> int64
-    get_deadline_for_index(idx: int64) -> int64
-    only_ungenerated_indexes(idxs: int64[]) -> int64[]
+    // Generated goal tracking
     is_generated(idx: int64) -> bool
     link_goal(idx: int64, goal_id: ID) -> void
     get_linked_goal(idx: int64) -> Goal | None
     unlink_goal(idx: int64) -> void
     set_generated(idx: int64, is_generated: bool) -> void
 
-    id: ID
-    name: str
-    desc: str | None
-    timebased_criteria_seconds: int64 | None
-    ect_seconds: int64 | None
+
+RecurrenceTemplate:
+
+    // Goal main data
+    static_dat: StaticGoalDat
+
+    subgoal_set: Set<GoalTemplate | RecurrenceTemplate>
+    strategy_set: Set<GoalTemplate | RecurrenceTemplate>
+
+    // Hard bounds on recurrence (set to bounds of parent if one is present)
+    rec_lower_bound_unix: int64
+    rec_upper_bound_unix: int64 | None
+
+    // Deadline starttime definition (Recurrence Function)
+    rec_pattern: RecurrencePattern
+    starttime_generator: RelativeTimeGenerator
+    deadline_generator: RelativeTimeGenerator
 
 
+GoalTemplate:
+    // Goal main data
+    static_dat: StaticGoalDat
+
+    // Relative data of children
+    subgoal_set: Set<GoalTemplate | RecurrenceTemplate>
+    strategy_set: Set<GoalTemplate | RecurrenceTemplate>
+
+    // Starttime and Deadline relative to whatever is making this goal
+    starttime_rel: RelativeTimeGenerator
+    deadline_rel: RelativeTimeGenerator
 
 
+Layers:
+    - Visual Layer: in charge of visual frontend only. stores only current visual state
+    - State Layer: application state, cache of server data, what stays in client memory
+    - Server Layer: source of truth, does not trust the client, original source of all data
+    - Database Layer: server data stored and queried here
 
-RecurrenceDeadlinePattern:
-    get_re
+Webapp:
+    - Visual Layer: Frontend ReactJS App
+    - State Layer: Frontend ReactJS App
+    - Server Layer: Server Backend App
+    - Database Layer: PostgreSQL & Adapter Script
 
-RecurrenceStarttimePattern:
-    get
+
 
 
 For each goal:
@@ -286,35 +325,6 @@ For each goal:
     Add recurrence icon if recurrence
 
 
-Recur(0)
-	- Title, Desc, Time Criteria, ECT: Read 120 hours
-	- Lower bound: 9/6/2025, 0:00
-	- Upper bound: infinity
-	- Recurrence Function: [NextAvailableDayAlign(Lower bound) + 1 Year], Loop([NextDay() + 1 Year])
-	- Contributes to: NULL
-	- Contributor type: NULL
-	- Subgoal Set: NULL
-	- Strategy Set: {
-		RecurTemplate{
-			- Title, Desc, Time Criteria, ECT: Read 10 hours
-			- Recurrence Function: [NextAvailableDayAlign(Lower bound) + 1 Month], Loop([NextDay() + 1 Month])
-			- Subgoal Set: NULL
-			- Strategy Set: {
-				RecurTemplate{
-					- Title, Desc, Time Criteria, ECT: Read 1 hour
-					- Recurrence Function: [EvenSplitDayAligned(Lower bound, Upper bound, count=10, genesis_starttime=false)]
-					- Subgoal Set: NULL
-					- Strategy Set: NULL
-				}
-			}
-		},
-		GoalTemplate{
-			- Title, Desc, Time Criteria, ECT: Log yearly stats in spreadsheet
-			- Starttime, Deadline: [EarliestPriorAvailableDayAlign(Parent Deadline) + 1 Day]
-			- Subgoal Set: NULL
-			- Strategy Set: NULL
-		}
-	}
 
 - Whenever a goal is generated via a recurrence, all GoalTemplates are generated as goals and all RecurTemplates are generates as root Recur instances
 
