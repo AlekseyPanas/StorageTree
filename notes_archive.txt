@@ -301,18 +301,30 @@ GoalTemplate:
 
 Layers:
     - Visual Layer: in charge of visual frontend only. stores only current visual state
-    - State Layer: application state, cache of server data, what stays in client memory
+    - State Layer: application state, cache of server data, what stays on client
     - Server Layer: source of truth, does not trust the client, original source of all data
     - Database Layer: server data stored and queried here
 
 Webapp:
     - Visual Layer: Frontend ReactJS App
-    - State Layer: Frontend ReactJS App
+    - State Layer: Frontend ReactJS App & LocalStorage
     - Server Layer: Server Backend App
     - Database Layer: PostgreSQL & Adapter Script
 
+Desktop App:
+    - Visual Layer: Frontend ReactJS App
+    - State Layer: Rust Backend w/ Sqlite
+    - Server Layer: Server Backend App
+    - Database Layer: PostgreSQL & Adapter Script
 
+Local Storage:
+    - Visual Layer: Frontend ReactJS App
+    - State Layer: Rust Backend w/ Sqlite
+    - Server Layer: NONE
+    - Database Layer: NONE
 
+Monetization:
+    -
 
 For each goal:
     If the goal is day-bound, add to day column
