@@ -78,3 +78,20 @@ export interface AppState {
     goals: Goal[];
     recurrences: Recurrence[];
 }
+
+export interface Maybe<T> {
+    data: T | null;
+    not_logged_in_error: boolean;
+    not_authorized_error: boolean;
+    license_token_expired_error: boolean;
+}
+
+export interface StateLayerAdapter {
+    // Acquiring and reacting to state changes
+    get_current_state(): Maybe<AppState>;
+    on_state_change(fn: (state: AppState) => void): void;
+
+    // Submitting state change operations
+
+    // TODO: This list is growing
+}
