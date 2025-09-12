@@ -14,12 +14,15 @@ function App({ stateLayer }: AppProps) {
     //      and if gone offline, it checks the existence of a token and assumes the user is the latest one logged in
 
     // Grab initial core app state
-    const [appDataState, setAppDataState] = useState(stateLayer.get_current_state().data);
+    const [appDataState, setAppDataState] = useState<AppState | null>(stateLayer.get_current_state().data);
 
     // Subscribe to receive state updates
     useEffect(() => {
         stateLayer.on_state_change((newState: AppState) => { setAppDataState(newState); })
     }, []);
+
+    // State related only to the view
+    const [hourRange, setHourRange] = useState<[number, number]>([7, 24]);
 
     return (
     <div className="day-view-container" style={{display: "flex", width: '100vw', height: '100vh', margin: 0, padding: 0}}>
@@ -32,14 +35,41 @@ function App({ stateLayer }: AppProps) {
                 <div className="main-grid-left-bar" style={{width:'10%', height:'100%', margin: 0, padding: 0, backgroundColor: 'rgb(179,179,179)'}}>
 
                 </div>
-                <div className="main-grid-day-col" style={{height: '100%', margin: 0, padding: 0, backgroundColor: 'rgb(232,232,232)'}}>
-                    <div className="goal-block">
-                        Goal Name
+                <div className="main-grid-days-container" style={{display: "flex", width: "90%", justifyContent: "space-between"}}>
+                    <div className="main-grid-day-col" style={{
+                        flex: 1,
+                        position: "relative",
+                        height: '100%',
+                        margin: 0,
+                        padding: 0,
+                        backgroundColor: 'rgb(232,232,232)'
+                    }}>
+                        <div className="goal-block" style={{
+                            backgroundColor: "rgb(168,244,208)",
+                            paddingLeft: "5px",
+                            paddingRight: "5px",
+                            borderRadius: "5px",
+                            fontFamily: "sans-serif",
+                            height: "25px",
+                            overflow: "hidden",
+                            borderTop: "solid 2px",
+                            borderBottom: "dashed 1px",
+                            borderRight: "dashed 1px",
+                            borderLeft: "dashed 1px",
+                            position: "absolute",
+                            top: "5%",
+                            left: '50%',
+                            transform: 'translateX(-50%)'
+                        }}>
+                            Goal Name
+                        </div>
                     </div>
                 </div>
+
             </div>
 
-            <div className="main-grid-bottom-half" style={{width: '100%', height: '30%', margin: 0, padding: 0, backgroundColor: 'rgb(210,218,218)'}}>
+            <div className="main-grid-bottom-half"
+                 style={{width: '100%', height: '30%', margin: 0, padding: 0, backgroundColor: 'rgb(210,218,218)'}}>
                 <div className="main-grid-left-bar">
 
                 </div>
