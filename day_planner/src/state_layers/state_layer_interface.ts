@@ -86,7 +86,7 @@ export interface Maybe<T> {
     license_token_expired_error: boolean;
 }
 
-export interface StateLayerAdapter {
+export interface IStateLayerAdapter {
     // Acquiring and reacting to state changes
     get_current_state(): Maybe<AppState>;
     on_state_change(fn: (state: AppState) => void): void;
