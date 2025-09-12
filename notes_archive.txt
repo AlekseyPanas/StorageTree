@@ -299,32 +299,22 @@ GoalTemplate:
     deadline_rel: RelativeTimeGenerator
 
 
-Layers:
-    - Visual Layer: in charge of visual frontend only. stores only current visual state
-    - State Layer: application state, cache of server data, what stays on client
-    - Server Layer: source of truth, does not trust the client, original source of all data
-    - Database Layer: server data stored and queried here
+state = (Goal[], Recurrence[])
 
-Webapp:
-    - Visual Layer: Frontend ReactJS App
-    - State Layer: Frontend ReactJS App & LocalStorage
-    - Server Layer: Server Backend App
-    - Database Layer: PostgreSQL & Adapter Script
+Desktop & Mobile:
+    React Visual Layer
+    JS Adapter + Rust backend State Layer
+    Rust backend Auth Layer with auth logins through app redirect
 
-Desktop App:
-    - Visual Layer: Frontend ReactJS App
-    - State Layer: Rust Backend w/ Sqlite
-    - Server Layer: Server Backend App
-    - Database Layer: PostgreSQL & Adapter Script
+Web PWA:
+    React Visual Layer
+    JS Local Storage State & Auth Layers
+    Simple webserver to serve the app
 
-Local Storage:
-    - Visual Layer: Frontend ReactJS App
-    - State Layer: Rust Backend w/ Sqlite
-    - Server Layer: NONE
-    - Database Layer: NONE
+One Global Auth Server
+One Global Sync Server
 
-Monetization:
-    -
+
 
 For each goal:
     If the goal is day-bound, add to day column
