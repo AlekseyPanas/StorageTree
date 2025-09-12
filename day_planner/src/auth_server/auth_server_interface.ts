@@ -3,7 +3,7 @@ export enum LicenseLevel {
     PREMIUM
 }
 
-export interface LicenseToken {
+export type LicenseToken = {
     user_id: string;
     level: LicenseLevel;
     expiry_unix: number;

@@ -15,7 +15,7 @@ export interface RecurrencePattern {
 }
 
 // Goal data which doesn't change across recurrence spawns
-export interface StaticGoalDat {
+export type StaticGoalDat = {
     name: string;
     desc: string | null;
     timebased_criteria_seconds: number | null;
@@ -25,7 +25,7 @@ export interface StaticGoalDat {
 }
 
 // Existing goal instance
-export interface Goal {
+export type Goal = {
     id: number;
     static_data: StaticGoalDat;
     timebased_progress_seconds: number | null;
@@ -38,7 +38,7 @@ export interface Goal {
 }
 
 // Template for generating a recurrence relative to a window
-export interface RecurrenceTemplate {
+export type RecurrenceTemplate = {
     static_data: StaticGoalDat;
 
     subgoal_set: Set<GoalTemplate | RecurrenceTemplate>
@@ -53,7 +53,7 @@ export interface RecurrenceTemplate {
 }
 
 // Template for generating a goal relative to a time
-export interface GoalTemplate {
+export type GoalTemplate = {
     static_data: StaticGoalDat;
 
     subgoal_set: Set<GoalTemplate | RecurrenceTemplate>
@@ -74,12 +74,12 @@ export interface Recurrence {
     set_generated(idx: number, is_generate: boolean): void;
 }
 
-export interface AppState {
+export type AppState = {
     goals: Goal[];
     recurrences: Recurrence[];
 }
 
-export interface Maybe<T> {
+export type Maybe<T> = {
     data: T | null;
     not_logged_in_error: boolean;
     not_authorized_error: boolean;

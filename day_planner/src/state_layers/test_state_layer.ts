@@ -2,7 +2,7 @@ import {AppState, IStateLayerAdapter, Maybe} from "./state_layer_interface";
 import {LicenseToken} from "../auth_server/auth_server_interface";
 import {IAuthLayer} from "../auth_layers/auth_layer_interface";
 
-class TestStateLayer implements IStateLayerAdapter {
+export class TestStateLayer implements IStateLayerAdapter {
     private cur_state: AppState;
     private auth_layer: IAuthLayer;
     private cur_on_state_change: (state: AppState) => void;
